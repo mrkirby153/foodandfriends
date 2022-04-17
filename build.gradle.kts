@@ -1,8 +1,10 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import java.util.Properties
 
 plugins {
     id("org.springframework.boot") version "2.6.6"
     id("io.spring.dependency-management") version "1.0.11.RELEASE"
+    id("org.flywaydb.flyway") version "6.0.6"
     kotlin("jvm") version "1.6.10"
     kotlin("plugin.spring") version "1.6.10"
 }
@@ -18,6 +20,7 @@ configurations {
 }
 
 repositories {
+    mavenLocal()
     mavenCentral()
     maven {
         url = uri("https://repo.mrkirby153.com/repository/maven-public/")
@@ -47,4 +50,29 @@ tasks.withType<KotlinCompile> {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+flyway {
+    var username = ""
+    var url = ""
+    var password = ""
+    val bundledFile = file("src/main/resources/application.properties")
+    val userFile = file("config/application.properties")
+    if (bundledFile.exists()) {
+        val props = Properties().apply { load(bundledFile.inputStream()) }
+        url = props["spring.datasource.url"] as? String ?: ""
+        username = props["spring.datasource.username"] as? String ?: ""
+        password = props["spring.datasource.password"] as? String ?: ""
+    }
+
+    if (userFile.exists()) {
+        val props = Properties().apply { load(userFile.inputStream()) }
+        url = props["spring.datasource.url"] as? String ?: ""
+        username = props["spring.datasource.username"] as? String ?: ""
+        password = props["spring.datasource.password"] as? String ?: ""
+    }
+
+    this.url = url
+    this.user = username
+    this.password = password
 }
