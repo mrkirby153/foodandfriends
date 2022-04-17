@@ -8,7 +8,7 @@ import javax.persistence.Id
 import javax.persistence.MappedSuperclass
 
 @MappedSuperclass
-abstract class AbstractJpaEntity<T : java.io.Serializable>(@Id open val id: T? = null) {
+abstract class AbstractJpaEntity<T : java.io.Serializable>(@Id open val id: T? = null) : BaseAbstractJpaEntity<T>() {
 
     override fun equals(other: Any?): Boolean {
         other ?: return false
