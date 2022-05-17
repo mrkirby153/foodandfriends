@@ -35,6 +35,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     implementation("com.mrkirby153:bot-core:4.0-SNAPSHOT")
+    implementation("com.mrkirby153:interaction-menus:1.0-SNAPSHOT")
     implementation("net.dv8tion:JDA:5.0.0-alpha.9")
     runtimeOnly("org.postgresql:postgresql")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
