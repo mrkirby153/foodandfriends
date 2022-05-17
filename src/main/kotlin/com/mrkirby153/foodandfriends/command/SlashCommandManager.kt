@@ -25,6 +25,7 @@ class SlashCommandManager(
 
     init {
         slashCommands.add(EventSlashCommands::class.java)
+        slashCommands.add(EmailSlashCommands::class.java)
     }
 
     @EventListener
