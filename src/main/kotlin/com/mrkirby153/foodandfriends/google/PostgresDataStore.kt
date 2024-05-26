@@ -95,11 +95,17 @@ class PostgresDataStore<V : Serializable?>(
 
 class PostgresDataStoreFactory(
     private val dataStoreEntityRepository: DataStoreEntityRepository,
+    private val idPrefix: String?,
     private val transactionTemplate: TransactionTemplate
 ) : DataStoreFactory {
 
     override fun <V : Serializable?> getDataStore(id: String): DataStore<V> {
-        return PostgresDataStore(dataStoreEntityRepository, transactionTemplate, this, id)
+        return PostgresDataStore(
+            dataStoreEntityRepository,
+            transactionTemplate,
+            this,
+            idPrefix?.run { "${this}_$id" } ?: id
+        )
     }
 
 }

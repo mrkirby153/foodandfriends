@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionTemplate
 
 interface DataStoreService {
-    fun getDataStoreFactory(): DataStoreFactory
+    fun getDataStoreFactory(idPrefix: String? = null): DataStoreFactory
 }
 
 
@@ -17,8 +17,8 @@ class PostgresDataStoreManager(
     private val template: TransactionTemplate
 ) : DataStoreService {
 
-    override fun getDataStoreFactory(): DataStoreFactory {
-        return PostgresDataStoreFactory(dataStoreEntityRepository, template)
+    override fun getDataStoreFactory(idPrefix: String?): DataStoreFactory {
+        return PostgresDataStoreFactory(dataStoreEntityRepository, idPrefix, template)
     }
 
 }

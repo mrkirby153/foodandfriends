@@ -19,7 +19,7 @@ class AuthorizationConfig(
     dataStoreService: DataStoreService
 ) {
 
-    private val dataStore = dataStoreService.getDataStoreFactory()
+    private val dataStore = dataStoreService.getDataStoreFactory("oauth")
 
     @Bean
     fun httpTransport() = GoogleNetHttpTransport.newTrustedTransport()
