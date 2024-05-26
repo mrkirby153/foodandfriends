@@ -9,6 +9,7 @@ import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
 import com.mrkirby153.botcore.coroutine.await
 import com.mrkirby153.foodandfriends.google.AuthorizationHandler
 import com.mrkirby153.foodandfriends.google.GoogleOAuthException
+import com.mrkirby153.foodandfriends.service.CalendarService
 import com.mrkirby153.foodandfriends.service.DataStoreService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.stereotype.Component
@@ -17,7 +18,8 @@ import java.io.Serializable
 @Component
 class TestCommands(
     dataStoreService: DataStoreService,
-    private val authorizationHandler: AuthorizationHandler
+    private val authorizationHandler: AuthorizationHandler,
+    private val calendarService: CalendarService
 ) : ProvidesSlashCommands {
 
     private val log = KotlinLogging.logger { }
@@ -28,11 +30,24 @@ class TestCommands(
 
     override fun registerSlashCommands(executor: DslCommandExecutor) {
         executor.registerCommands {
+            slashCommand("test-invite") {
+                run {
+                    val event = calendarService.buildCalendarInvite()
+                    val evt =
+                        calendarService.getService(user).events().insert("primary", event)
+                            .setSendUpdates("all").execute()
+                    reply("Created event: ${evt.iCalUID}").await()
+                }
+            }
 
             slashCommand("oauth") {
                 subCommand("check-auth") {
                     run {
                         if (authorizationHandler.authorized(user)) {
+                            val credentials = authorizationHandler.getAuthorization(user)
+                            if (credentials != null) {
+                                log.debug { "Credentials: ${credentials.accessToken}\nRefresh token: ${credentials.refreshToken}\n${credentials.expiresInSeconds}" }
+                            }
                             reply("Authorized!").setEphemeral(true).await()
                         } else {
                             reply("Not Authorized").setEphemeral(true).await()
