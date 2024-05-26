@@ -7,7 +7,7 @@ import jakarta.persistence.Table
 import me.mrkirby153.kcutils.ulid.generateUlid
 
 @Entity
-@Table(name = "order")
+@Table(name = "schedule_order")
 class Order {
     @Id
     @Column(name = "id")
