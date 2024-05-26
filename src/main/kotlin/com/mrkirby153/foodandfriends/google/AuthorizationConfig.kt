@@ -5,8 +5,8 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
-import com.google.api.client.util.store.FileDataStoreFactory
 import com.google.api.services.calendar.CalendarScopes
+import com.mrkirby153.foodandfriends.service.DataStoreService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -16,7 +16,10 @@ import java.io.InputStreamReader
 @Configuration
 class AuthorizationConfig(
     @Value("\${google.credentials}") private val googleCredentialsPath: String,
+    dataStoreService: DataStoreService
 ) {
+
+    private val dataStore = dataStoreService.getDataStoreFactory()
 
     @Bean
     fun httpTransport() = GoogleNetHttpTransport.newTrustedTransport()
@@ -39,6 +42,6 @@ class AuthorizationConfig(
             gson,
             secrets,
             listOf(CalendarScopes.CALENDAR)
-        ).setDataStoreFactory(FileDataStoreFactory(File("config/tokens"))).build()
+        ).setDataStoreFactory(dataStore).build()
     }
 }

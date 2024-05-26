@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Authorization Callback</title>
+</head>
+<body>
+Your authorization code is: <span id="auth_code">{CODE}</span>
+
+<script>
+  let urlSearchParams = new URLSearchParams(window.location.search)
+  document.getElementById("auth_code").innerText = urlSearchParams.get("code")
+</script>
+</body>
+</html>

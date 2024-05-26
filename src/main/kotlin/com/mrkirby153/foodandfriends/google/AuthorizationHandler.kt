@@ -14,6 +14,8 @@ interface AuthorizationHandler {
     fun getAuthorization(user: User): Credential?
 
     fun getAuthorizationUrl(user: User): String
+
+    fun authorized(user: User): Boolean
 }
 
 
@@ -30,14 +32,17 @@ class AuthorizationManager(
 
         val existing = try {
             getAuthorization(user)
-        } catch (e: AuthorizationExpiredException) {
+        } catch (e: GoogleOAuthException.AuthorizationExpiredException) {
             null
         }
         if (existing != null) {
-            log.trace { "using existing credentials" }
-            return existing
+            throw GoogleOAuthException.AlreadyAuthenticatedException("Already authenticated")
         }
-        val resp = flow.newTokenRequest(code).setRedirectUri(redirectUri).execute()
+        val resp = try {
+            flow.newTokenRequest(code).setRedirectUri(redirectUri).execute()
+        } catch (e: Exception) {
+            throw GoogleOAuthException.AuthenticationFailedException("Authentication Error", e)
+        }
         return flow.createAndStoreCredential(resp, user.id)
     }
 
@@ -47,11 +52,19 @@ class AuthorizationManager(
 
         if (credential.refreshToken != null || credential.expiresInSeconds == null || credential.expiresInSeconds > 60)
             return credential
-        throw AuthorizationExpiredException("Refresh token expired")
+        throw GoogleOAuthException.AuthorizationExpiredException("Refresh token expired")
     }
 
     override fun getAuthorizationUrl(user: User): String {
         return flow.newAuthorizationUrl().setRedirectUri(redirectUri).build()
+    }
+
+    override fun authorized(user: User): Boolean {
+        return try {
+            getAuthorization(user) != null
+        } catch (e: GoogleOAuthException.AuthorizationExpiredException) {
+            false
+        }
     }
 
 }
