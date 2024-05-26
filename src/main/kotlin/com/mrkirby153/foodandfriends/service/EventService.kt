@@ -65,11 +65,11 @@ class EventManager(
     @Scheduled(cron = "\${bot.announce-cron:0 0 9 * * 2}", zone = "\${bot.announce-cron-zone:UTC}")
     override fun sendMessage() {
         log.debug("Sending F&F message")
-        channel.sendMessage(buildMessage(emptyList())).allowedMentions(emptyList()).queue { msg ->
-            msg.addReaction(THUMBS_UP).queue()
-            val entity = SentAnnouncementMessage(messageId = msg.id, channelId = msg.channel.id)
-            sentAnnouncementMessageRepo.save(entity)
-        }
+//        channel.sendMessage(buildMessage(emptyList())).allowedMentions(emptyList()).queue { msg ->
+//            msg.addReaction(THUMBS_UP).queue()
+//            val entity = SentAnnouncementMessage(messageId = msg.id, channelId = msg.channel.id)
+//            sentAnnouncementMessageRepo.save(entity)
+//        }
     }
 
     @EventListener
@@ -83,36 +83,36 @@ class EventManager(
     }
 
     private fun handleReactionChange(event: GenericMessageReactionEvent) {
-        if (event.reactionEmote.emoji == THUMBS_UP && event.user?.isBot == false) {
-            sentAnnouncementMessageRepo.getFirstByMessageId(event.messageId) ?: return
-            if (updateFuture[event.messageId] == null) {
-                log.debug("Queueing update for {}", event.messageId)
-                updateFuture[event.messageId] =
-                    scheduler.schedule(
-                        { updateMessage(event.messageId) },
-                        Date(System.currentTimeMillis() + 5000)
-                    )
-            }
-        }
+//        if (event.reactionEmote.emoji == THUMBS_UP && event.user?.isBot == false) {
+//            sentAnnouncementMessageRepo.getFirstByMessageId(event.messageId) ?: return
+//            if (updateFuture[event.messageId] == null) {
+//                log.debug("Queueing update for {}", event.messageId)
+//                updateFuture[event.messageId] =
+//                    scheduler.schedule(
+//                        { updateMessage(event.messageId) },
+//                        Date(System.currentTimeMillis() + 5000)
+//                    )
+//            }
+//        }
     }
 
 
     private fun updateMessage(id: String) {
-        log.debug("Updating message {}", id)
-        try {
-            val savedMsg = sentAnnouncementMessageRepo.getFirstByMessageId(id) ?: return
-            val chan = shardManager.getTextChannelById(savedMsg.channelId) ?: return
-            chan.retrieveMessageById(id).queue { msg ->
-                scheduler.schedule({
-                    val users =
-                        msg.retrieveReactionUsers(THUMBS_UP).stream()
-                            .filter { it != msg.jda.selfUser }.collect(Collectors.toList())
-                    log.debug("Users: {}", users.joinToString(", "))
-                    msg.editMessage(buildMessage(users)).allowedMentions(emptyList()).queue()
-                }, Instant.now())
-            }
-        } finally {
-            updateFuture.remove(id)
-        }
+//        log.debug("Updating message {}", id)
+//        try {
+//            val savedMsg = sentAnnouncementMessageRepo.getFirstByMessageId(id) ?: return
+//            val chan = shardManager.getTextChannelById(savedMsg.channelId) ?: return
+//            chan.retrieveMessageById(id).queue { msg ->
+//                scheduler.schedule({
+//                    val users =
+//                        msg.retrieveReactionUsers(THUMBS_UP).stream()
+//                            .filter { it != msg.jda.selfUser }.collect(Collectors.toList())
+//                    log.debug("Users: {}", users.joinToString(", "))
+//                    msg.editMessage(buildMessage(users)).allowedMentions(emptyList()).queue()
+//                }, Instant.now())
+//            }
+//        } finally {
+//            updateFuture.remove(id)
+//        }
     }
 }

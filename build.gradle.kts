@@ -1,17 +1,18 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.util.Properties
 
+
 plugins {
-    id("org.springframework.boot") version "2.6.6"
-    id("io.spring.dependency-management") version "1.0.11.RELEASE"
-    id("org.flywaydb.flyway") version "6.0.6"
-    kotlin("jvm") version "1.6.10"
-    kotlin("plugin.spring") version "1.6.10"
+    id("org.springframework.boot") version "3.1.7"
+    id("io.spring.dependency-management") version "1.1.4"
+    id("org.flywaydb.flyway") version "10.6.0"
+    kotlin("jvm") version "1.9.22"
+    kotlin("plugin.spring") version "1.9.22"
 }
 
 group = "com.mrkirby153"
 version = "0.0.1-SNAPSHOT"
-java.sourceCompatibility = JavaVersion.VERSION_11
+java.sourceCompatibility = JavaVersion.VERSION_21
 
 configurations {
     compileOnly {
@@ -34,18 +35,18 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
-    implementation("com.mrkirby153:bot-core:4.0-SNAPSHOT")
-    implementation("com.mrkirby153:interaction-menus:1.0-SNAPSHOT")
-    implementation("net.dv8tion:JDA:5.0.0-alpha.11")
+    implementation("com.mrkirby153:bot-core:7.1-SNAPSHOT")
+    implementation("com.mrkirby153:interaction-menus:2.0-SNAPSHOT")
+    implementation("net.dv8tion:JDA:5.0.0-beta.24")
+    implementation("io.github.oshai:kotlin-logging-jvm:6.0.3")
     runtimeOnly("org.postgresql:postgresql")
-    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         freeCompilerArgs = listOf("-Xjsr305=strict")
-        jvmTarget = "11"
+        jvmTarget = "21"
     }
 }
 

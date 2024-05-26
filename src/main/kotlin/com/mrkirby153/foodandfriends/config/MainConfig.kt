@@ -1,11 +1,8 @@
 package com.mrkirby153.foodandfriends.config
 
-import com.mrkirby153.botcore.command.slashcommand.SlashCommandExecutor
-import com.mrkirby153.botcore.spring.CommandAutoConfiguration
-import com.mrkirby153.botcore.spring.JDAAutoConfiguration
+import com.mrkirby153.botcore.spring.config.EnableBot
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
 import org.springframework.context.support.ResourceBundleMessageSource
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing
@@ -20,7 +17,7 @@ import java.util.concurrent.Executor
 @EnableScheduling
 @EnableAsync(proxyTargetClass = true)
 @EnableJpaAuditing
-@Import(JDAAutoConfiguration::class, CommandAutoConfiguration::class)
+@EnableBot
 class MainConfig : AsyncConfigurer {
 
     private val threadPoolTaskExecutor = ThreadPoolTaskExecutor()
@@ -46,7 +43,4 @@ class MainConfig : AsyncConfigurer {
             setThreadNamePrefix("TaskScheduler")
         }
     }
-
-    @Bean
-    fun slashCommandExecutor() = SlashCommandExecutor()
 }

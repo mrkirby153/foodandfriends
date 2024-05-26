@@ -2,9 +2,9 @@ package com.mrkirby153.foodandfriends.service
 
 import com.mrkirby153.foodandfriends.entity.Email
 import com.mrkirby153.foodandfriends.entity.EmailRepo
+import jakarta.transaction.Transactional
 import net.dv8tion.jda.api.entities.User
 import org.springframework.stereotype.Service
-import javax.transaction.Transactional
 
 interface EmailService {
 

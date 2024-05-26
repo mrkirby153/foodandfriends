@@ -1,11 +1,10 @@
 package com.mrkirby153.foodandfriends.entity
 
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.Id
+import jakarta.persistence.MappedSuperclass
 import org.springframework.data.util.ProxyUtils
 import java.lang.reflect.Field
-import javax.persistence.GeneratedValue
-import javax.persistence.GenerationType
-import javax.persistence.Id
-import javax.persistence.MappedSuperclass
 
 @MappedSuperclass
 abstract class AbstractJpaEntity<T : java.io.Serializable>(@Id open val id: T? = null) : BaseAbstractJpaEntity<T>() {

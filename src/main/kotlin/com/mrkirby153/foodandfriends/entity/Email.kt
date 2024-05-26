@@ -1,12 +1,12 @@
 package com.mrkirby153.foodandfriends.entity
 
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import net.dv8tion.jda.api.entities.User
 import org.springframework.data.jpa.repository.JpaRepository
-import javax.persistence.Column
-import javax.persistence.Entity
-import javax.persistence.GeneratedValue
-import javax.persistence.Id
-import javax.persistence.Table
 
 @Entity
 @Table(name = "emails")
