@@ -5,10 +5,12 @@ import com.google.api.client.util.store.DataStore
 import com.google.api.client.util.store.DataStoreFactory
 import com.mrkirby153.foodandfriends.entity.DataStoreEntity
 import com.mrkirby153.foodandfriends.entity.DataStoreEntityRepository
+import org.springframework.transaction.support.TransactionTemplate
 import java.io.Serializable
 
 class PostgresDataStore<V : Serializable?>(
     private val dataStoreEntityRepository: DataStoreEntityRepository,
+    private val template: TransactionTemplate,
     private val factory: DataStoreFactory,
     private val id: String
 ) : DataStore<V> {
@@ -48,12 +50,16 @@ class PostgresDataStore<V : Serializable?>(
     }
 
     override fun clear(): DataStore<V> {
-        dataStoreEntityRepository.deleteAllByDataStoreId(this.id)
+        template.execute {
+            dataStoreEntityRepository.deleteAllByDataStoreId(this.id)
+        }
         return this
     }
 
     override fun delete(key: String): DataStore<V> {
-        dataStoreEntityRepository.deleteByDataStoreIdAndKey(this.id, key)
+        template.execute {
+            dataStoreEntityRepository.deleteByDataStoreIdAndKey(this.id, key)
+        }
         return this
     }
 
@@ -89,11 +95,11 @@ class PostgresDataStore<V : Serializable?>(
 
 class PostgresDataStoreFactory(
     private val dataStoreEntityRepository: DataStoreEntityRepository,
-    private val id: String
+    private val transactionTemplate: TransactionTemplate
 ) : DataStoreFactory {
 
     override fun <V : Serializable?> getDataStore(id: String): DataStore<V> {
-        return PostgresDataStore(dataStoreEntityRepository, this, id)
+        return PostgresDataStore(dataStoreEntityRepository, transactionTemplate, this, id)
     }
 
 }

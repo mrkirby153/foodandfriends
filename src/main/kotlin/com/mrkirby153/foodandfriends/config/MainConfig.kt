@@ -1,6 +1,10 @@
 package com.mrkirby153.foodandfriends.config
 
+import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.spring.config.EnableBot
+import com.mrkirby153.botcore.spring.config.RegisterSlashCommands
+import me.mrkirby153.kcutils.spring.coroutine.CoroutineTransactionHandler
+import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
@@ -11,6 +15,7 @@ import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
+import org.springframework.transaction.support.TransactionTemplate
 import java.util.concurrent.Executor
 
 @Configuration
@@ -18,9 +23,19 @@ import java.util.concurrent.Executor
 @EnableAsync(proxyTargetClass = true)
 @EnableJpaAuditing
 @EnableBot
-class MainConfig : AsyncConfigurer {
+@RegisterSlashCommands
+class MainConfig(
+    dslCommandExecutor: DslCommandExecutor,
+    shardManager: ShardManager,
+    transactionTemplate: TransactionTemplate
+) : AsyncConfigurer {
 
     private val threadPoolTaskExecutor = ThreadPoolTaskExecutor()
+
+    init {
+        shardManager.addEventListener(dslCommandExecutor.getListener())
+        CoroutineTransactionHandler.setDefault(transactionTemplate)
+    }
 
     @Bean
     fun messageSource(): ResourceBundleMessageSource {

@@ -5,6 +5,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow
 import io.github.oshai.kotlinlogging.KotlinLogging
 import net.dv8tion.jda.api.entities.User
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Service
 
 interface AuthorizationHandler {
 
@@ -16,6 +17,7 @@ interface AuthorizationHandler {
 }
 
 
+@Service
 class AuthorizationManager(
     private val flow: GoogleAuthorizationCodeFlow,
     @Value("\${google.credentials.redirect-uri}") private val redirectUri: String
