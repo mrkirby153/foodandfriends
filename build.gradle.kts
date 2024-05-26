@@ -35,10 +35,19 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.4")
+    implementation("me.mrkirby153:KirbyUtils-Common:7.0-SNAPSHOT")
+    implementation("me.mrkirby153:KirbyUtils-Spring:7.0-SNAPSHOT")
     implementation("com.mrkirby153:bot-core:7.1-SNAPSHOT")
     implementation("com.mrkirby153:interaction-menus:2.0-SNAPSHOT")
     implementation("net.dv8tion:JDA:5.0.0-beta.24")
     implementation("io.github.oshai:kotlin-logging-jvm:6.0.3")
+
+    implementation("com.google.api-client:google-api-client:2.0.0")
+    implementation("com.google.oauth-client:google-oauth-client-jetty:1.34.1")
+    implementation("com.google.apis:google-api-services-calendar:v3-rev20220715-2.0.0")
+
     runtimeOnly("org.postgresql:postgresql")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }

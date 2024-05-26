@@ -8,9 +8,10 @@ import org.springframework.stereotype.Component
 @Component
 class SlashCommandManager(
     private val shardManager: ShardManager,
-//    private val slashCommandExecutor: SlashCommandExecutor,
     private val context: ApplicationContext,
-    @Value("\${bot.slash-command-guilds:}") private val slashCommandGuilds: String
+    @Value("\${bot.slash-command-guilds:}") private val slashCommandGuilds: String,
+
+//    private val
 ) {
 //    companion object {
 //        private val log = LogManager.getLogger()
