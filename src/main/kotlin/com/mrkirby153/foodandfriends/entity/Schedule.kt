@@ -41,7 +41,7 @@ class Schedule(
 ) {
 
     @OneToMany(mappedBy = "schedule")
-    var events: List<Event> = emptyList()
+    var events: MutableList<Event> = mutableListOf()
 
     @Column(name = "event_day_of_week")
     var eventDayOfWeek: DayOfWeek = DayOfWeek.MONDAY

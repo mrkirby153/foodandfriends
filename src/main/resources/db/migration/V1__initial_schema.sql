@@ -42,4 +42,13 @@ CREATE TABLE event
     calendar_event_id  varchar(255),
     date               timestamp,
     schedule_id        varchar(255) references schedule (id)
-)
+);
+
+CREATE TABLE rsvp
+(
+    id          varchar(255) not null primary key,
+    rsvp_source int          not null,
+    type        int          not null,
+    event_id    varchar(255) references event (id),
+    person      varchar(255) references person (id)
+);

@@ -11,8 +11,12 @@ import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.textChannel
 import com.mrkirby153.botcore.coroutine.await
 import com.mrkirby153.foodandfriends.entity.DayOfWeek
+import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
+import com.mrkirby153.foodandfriends.service.EventService
+import com.mrkirby153.foodandfriends.service.RSVPService
 import com.mrkirby153.foodandfriends.service.ScheduleService
+import io.github.oshai.kotlinlogging.KotlinLogging
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
@@ -22,8 +26,17 @@ import java.text.SimpleDateFormat
 class ScheduleCommands(
     private val scheduleRepository: ScheduleRepository,
     private val scheduleService: ScheduleService,
-    private val shardManager: ShardManager
+    private val shardManager: ShardManager,
+    private val eventService: EventService,
+    private val rsvpService: RSVPService
 ) : ProvidesSlashCommands {
+
+    private val scheduleAutocompleteName: (Schedule) -> String = {
+        val channelName = shardManager.getTextChannelById(it.channel)?.name ?: "${it.channel}"
+        "$channelName: ${it.eventTime} at ${it.eventDayOfWeek}"
+    }
+
+    private val log = KotlinLogging.logger {}
 
     override fun registerSlashCommands(executor: DslCommandExecutor) {
         executor.registerCommands {
@@ -41,8 +54,7 @@ class ScheduleCommands(
                     val eventTime by string {
                         name = "event_time"
                     }.required()
-                    val message by string {
-                    }.required()
+                    val message by string {}.required()
                     val channel by textChannel {
                         description = "The channel the message will be posted in"
                     }.optional()
@@ -63,12 +75,8 @@ class ScheduleCommands(
                 }
                 subCommand("remove") {
                     val schedule by scheduleRepository.argument(
-                        enableAutocomplete = true,
-                        autocompleteName = {
-                            val channelName =
-                                shardManager.getTextChannelById(it.channel)?.name ?: "${it.channel}"
-                            "$channelName: ${it.eventTime} at ${it.eventDayOfWeek}"
-                        }) {
+                        enableAutocomplete = true, autocompleteName = scheduleAutocompleteName
+                    ) {
                         description = "The schedule to remove"
                     }.required()
 
@@ -86,6 +94,20 @@ class ScheduleCommands(
                             it.editOriginal("Next post time is ${sdf.format(next.first.toEpochMilli())} for ${next.second.id}")
                                 .await()
                         }
+                    }
+                }
+
+                subCommand("post") {
+                    val schedule by scheduleRepository.argument(
+                        enableAutocomplete = true, autocompleteName = scheduleAutocompleteName
+                    ) {
+                        description = "The schedule to post"
+                    }.required()
+                    run {
+                        val event = eventService.createNextEvent(schedule())
+                        log.debug { "Next Event: ${event.id}" }
+                        eventService.postEvent(event)
+                        reply("Posted ${event.id}").await()
                     }
                 }
             }

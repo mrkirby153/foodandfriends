@@ -10,6 +10,10 @@ interface PersonService {
     fun setEmail(user: User, email: String)
 
     fun getEmail(user: User): String?
+
+    fun getByUser(user: User) = getByUser(user.idLong)
+
+    fun getByUser(userId: Long): Person?
 }
 
 
@@ -30,6 +34,10 @@ class PersonManager(
 
     override fun getEmail(user: User): String? {
         return personRepository.getByDiscordUserId(user.idLong)?.email
+    }
+
+    override fun getByUser(userId: Long): Person? {
+        return personRepository.getByDiscordUserId(userId)
     }
 
 }
