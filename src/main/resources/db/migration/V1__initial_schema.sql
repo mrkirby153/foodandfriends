@@ -12,6 +12,7 @@ CREATE INDEX "data_store_data_store_id_key" ON "data_store" ("data_store_id", "k
 CREATE TABLE schedule_order
 (
     id      varchar(255) not null primary key,
+    name    varchar(255) not null,
     "order" varchar(1024)         default '',
     current int          not null default 0
 );

@@ -58,7 +58,6 @@ class EventManager(
         val channel = shardManager.getTextChannelById(schedule.channel)
         checkNotNull(channel) { "Channel not found" }
         val msg = buildMessage(event)
-        log.debug { "B" }
         if (event.discordMessageId != 0L) {
             // There already is a message, check if it exists
             try {

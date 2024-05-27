@@ -2,6 +2,7 @@ package com.mrkirby153.foodandfriends.service
 
 import com.mrkirby153.botcore.spring.event.BotReadyEvent
 import com.mrkirby153.foodandfriends.entity.DayOfWeek
+import com.mrkirby153.foodandfriends.entity.Order
 import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -42,6 +43,10 @@ interface ScheduleService {
     fun delete(id: String)
 
     fun getNextOccurrence(schedule: Schedule): Instant
+
+    fun link(schedule: Schedule, order: Order): Schedule
+
+    fun unlink(schedule: Schedule): Schedule
 }
 
 @Service
@@ -147,6 +152,17 @@ class ScheduleManager(
         calendar.set(Calendar.SECOND, 0)
         calendar.set(Calendar.MILLISECOND, 0)
         return calendar.time.toInstant()
+    }
+
+    override fun link(schedule: Schedule, order: Order): Schedule {
+        schedule.order = order
+        order.schedule = schedule
+        return scheduleRepository.save(schedule)
+    }
+
+    override fun unlink(schedule: Schedule): Schedule {
+        schedule.order = null
+        return scheduleRepository.save(schedule)
     }
 
     @EventListener

@@ -14,6 +14,10 @@ interface PersonService {
     fun getByUser(user: User) = getByUser(user.idLong)
 
     fun getByUser(userId: Long): Person?
+
+    fun getOrCreate(user: User) = getOrCreate(user.idLong)
+
+    fun getOrCreate(userId: Long): Person
 }
 
 
@@ -38,6 +42,14 @@ class PersonManager(
 
     override fun getByUser(userId: Long): Person? {
         return personRepository.getByDiscordUserId(userId)
+    }
+
+    override fun getOrCreate(userId: Long): Person {
+        return personRepository.getByDiscordUserId(userId) ?: personRepository.save(
+            Person(
+                discordUserId = userId
+            )
+        )
     }
 
 }

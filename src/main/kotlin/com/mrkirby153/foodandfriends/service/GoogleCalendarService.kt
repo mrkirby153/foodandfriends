@@ -9,10 +9,8 @@ import com.google.api.services.calendar.model.EventAttendee
 import com.google.api.services.calendar.model.EventDateTime
 import com.mrkirby153.foodandfriends.entity.Event
 import com.mrkirby153.foodandfriends.entity.EventRepository
-import com.mrkirby153.foodandfriends.entity.PersonRepository
 import com.mrkirby153.foodandfriends.google.AuthorizationHandler
 import io.github.oshai.kotlinlogging.KotlinLogging
-import jakarta.persistence.EntityNotFoundException
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
 import java.time.temporal.ChronoUnit
@@ -30,7 +28,7 @@ class GoogleCalendarManager(
     private val authorizationHandler: AuthorizationHandler,
     private val transport: NetHttpTransport,
     private val gsonFactory: GsonFactory,
-    private val personRepository: PersonRepository, // TODO: Don't use the repo directly
+    private val orderService: OrderService,
     private val eventRepository: EventRepository
 ) : GoogleCalendarService {
 
@@ -96,13 +94,7 @@ class GoogleCalendarManager(
             end = EventDateTime().setDateTime(DateTime(endTime.toEpochMilli()))
                 .setTimeZone("America/Los_Angeles")
 
-            val invites = event.schedule?.order?.order?.mapNotNull {
-                try {
-                    personRepository.getReferenceById(it)
-                } catch (e: EntityNotFoundException) {
-                    null
-                }
-            } ?: emptyList()
+            val invites = event.schedule?.order?.run { orderService.getPeople(this) } ?: emptyList()
             val attendees = invites.filter { it.email != null }
                 .map { EventAttendee().setEmail(it.email) }.toList()
             log.trace { "Built event ${event.location}: ${attendees.joinToString(", ") { it.email }}" }
