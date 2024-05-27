@@ -2,7 +2,6 @@ package com.mrkirby153.foodandfriends.entity
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
-import jakarta.persistence.FetchType
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
@@ -40,4 +39,6 @@ interface EventRepository : JpaRepository<Event, String> {
     fun getByDateAndSchedule(date: Timestamp, schedule: Schedule): Event?
 
     fun getByDiscordMessageId(discordMessageId: Long): Event?
+
+    fun getAllByDateAfter(date: Timestamp): List<Event>
 }

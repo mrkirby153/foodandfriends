@@ -73,6 +73,30 @@ class ScheduleCommands(
                         reply("Created a new schedule with id ${schedule.id}!").await()
                     }
                 }
+                subCommand("list") {
+                    run {
+                        transaction {
+                            val schedules = scheduleRepository.findAll()
+                            if (schedules.isEmpty()) {
+                                reply("No schedules configured!").await()
+                                return@transaction
+                            }
+                            reply {
+                                text {
+                                    append("The following schedules are configured")
+                                    code(buildString {
+                                        schedules.forEach { schedule ->
+                                            val channelName =
+                                                shardManager.getTextChannelById(schedule.id)?.name
+                                                    ?: "${schedule.channel}"
+                                            append("- ${schedule.id}: #${channelName} ${schedule.eventDayOfWeek} @ ${schedule.eventTime}")
+                                        }
+                                    })
+                                }
+                            }.await()
+                        }
+                    }
+                }
                 subCommand("remove") {
                     val schedule by scheduleRepository.argument(
                         enableAutocomplete = true, autocompleteName = scheduleAutocompleteName
@@ -104,12 +128,8 @@ class ScheduleCommands(
                         description = "The schedule to post"
                     }.required()
                     run {
-                        transaction {
-                            val event = eventService.createNextEvent(schedule())
-                            log.debug { "Next Event: ${event.id}" }
-                            eventService.postEvent(event)
-                            reply("Posted ${event.id}").await()
-                        }
+                        val event = eventService.createAndPostNextEvent(schedule())
+                        reply("Posted ${event.id}").await()
                     }
                 }
             }

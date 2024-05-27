@@ -8,14 +8,17 @@ import com.mrkirby153.foodandfriends.entity.ScheduleRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import kotlinx.coroutines.runBlocking
+import me.mrkirby153.kcutils.Time
 import net.dv8tion.jda.api.entities.User
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
 import org.springframework.context.annotation.Lazy
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.TaskScheduler
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
 import org.springframework.stereotype.Service
 import java.text.SimpleDateFormat
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.ScheduledFuture
@@ -53,7 +56,8 @@ interface ScheduleService {
 class ScheduleManager(
     private val scheduleRepository: ScheduleRepository,
     @Lazy private val eventService: EventService,
-    private val taskExecutor: TaskScheduler
+    private val taskExecutor: TaskScheduler,
+    taskScheduler: ThreadPoolTaskScheduler
 ) : ScheduleService {
 
     private val calendarDayMap = mutableMapOf<Int, DayOfWeek>()
@@ -79,8 +83,7 @@ class ScheduleManager(
             ?: error("No current day of week")
         log.debug { "it is currently $currentDayOfWeek" }
         val calendar = Calendar.getInstance()
-        calendar.add(Calendar.DAY_OF_WEEK, 1)
-        while (calendar.get(Calendar.DAY_OF_WEEK) != now.get(Calendar.DAY_OF_WEEK)) {
+        do {
             val day = calendarDayMap[calendar.get(Calendar.DAY_OF_WEEK)]
             log.debug { "Checking for events on $day" }
             if (day != null) {
@@ -95,7 +98,9 @@ class ScheduleManager(
                         eventCalendar.set(Calendar.MINUTE, minute)
                         eventCalendar.set(Calendar.SECOND, 0)
                         eventCalendar
-                    }.entries.filter { it.value.activeEvent == null }.minByOrNull { (k, _) -> k }
+                    }.entries.filter {
+                        it.value.activeEvent == null && it.key.toInstant().isAfter(Instant.now())
+                    }.minByOrNull { (k, _) -> k }
                     log.debug { "Next event is ${first?.value?.message}" }
                     if (first != null) {
                         return Pair(first.key.toInstant(), first.value)
@@ -103,7 +108,7 @@ class ScheduleManager(
                 }
             }
             calendar.add(Calendar.DAY_OF_WEEK, 1)
-        }
+        } while (calendar.get(Calendar.DAY_OF_WEEK) != now.get(Calendar.DAY_OF_WEEK))
         return null
     }
 
@@ -174,7 +179,20 @@ class ScheduleManager(
     private fun scheduleNextPost() {
         val next = getNextPostTime()
         if (next == null) {
-            log.info { "No schedule to post" }
+            log.debug { "No schedule to post, running again in 1 hour" }
+            nextTriggerJob?.cancel(true)
+            nextRunAt = Instant.now().plus(1, ChronoUnit.HOURS)
+            log.debug {
+                "Running in ${
+                    Time.format(
+                        1,
+                        nextRunAt!!.toEpochMilli() - System.currentTimeMillis()
+                    )
+                }"
+            }
+            nextTriggerJob = taskExecutor.schedule({
+                scheduleNextPost()
+            }, nextRunAt!!)
             return
         }
         val postAt = next.first
@@ -191,7 +209,8 @@ class ScheduleManager(
         nextRunAt = postAt
         log.info {
             val sdf = SimpleDateFormat("MM-dd-yy HH:mm:ss")
-            "Scheduling run for ${sdf.format(Date.from(postAt))}"
+            val duration = Time.format(1, nextRunAt!!.toEpochMilli() - System.currentTimeMillis())
+            "Scheduling run for ${sdf.format(Date.from(postAt))} ($duration)"
         }
     }
 
@@ -200,7 +219,7 @@ class ScheduleManager(
             "Posting next event for schedule ${next.id}"
         }
         runBlocking {
-            postNext(next)
+            eventService.createAndPostNextEvent(next)
         }
         scheduleNextPost()
     }

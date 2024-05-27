@@ -64,19 +64,21 @@ class RSVPManager(
         }
         val existing =
             event.attendees.firstOrNull { it.person.id == person.id && it.rsvpSource == source }
-        if (existing != null) {
-            log.trace { "Removing existing rsvp with id ${existing.id}" }
-            event.attendees.remove(existing)
-            rSVPRepository.delete(existing)
+        val rsvp = if (existing != null) {
+            log.trace { "Updating existing rsvp with id ${existing.id}" }
+            existing.type = type
+            rSVPRepository.save(existing)
+        } else {
+            val new = rSVPRepository.saveAndFlush(RSVP(source, type).apply {
+                this.person = person
+                this.event = event
+            })
+            log.trace { "Creating RSVP with id ${new.id}" }
+            event.attendees.add(new)
+            new
         }
-        val new = rSVPRepository.saveAndFlush(RSVP(source, type).apply {
-            this.person = person
-            this.event = event
-        })
-        log.trace { "Creating RSVP with id ${new.id}" }
-        event.attendees.add(new)
         val newEvent = eventRepository.saveAndFlush(event)
-        eventPublisher.publishEvent(RSVPEvent(event, new, source, type))
+        eventPublisher.publishEvent(RSVPEvent(event, rsvp, source, type))
         return newEvent
     }
 

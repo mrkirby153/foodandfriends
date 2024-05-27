@@ -9,11 +9,18 @@ import com.google.api.services.calendar.model.EventAttendee
 import com.google.api.services.calendar.model.EventDateTime
 import com.mrkirby153.foodandfriends.entity.Event
 import com.mrkirby153.foodandfriends.entity.EventRepository
+import com.mrkirby153.foodandfriends.entity.RSVPSource
+import com.mrkirby153.foodandfriends.entity.RSVPType
 import com.mrkirby153.foodandfriends.google.AuthorizationHandler
 import io.github.oshai.kotlinlogging.KotlinLogging
+import jakarta.transaction.Transactional
 import org.springframework.context.event.EventListener
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import java.sql.Timestamp
+import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.concurrent.TimeUnit
 import com.google.api.services.calendar.model.Event as GoogleCalendarEvent
 
 interface GoogleCalendarService {
@@ -21,6 +28,8 @@ interface GoogleCalendarService {
     fun getCalendarEvent(event: Event): GoogleCalendarEvent?
 
     fun createCalendarEvent(event: Event): GoogleCalendarEvent?
+
+    fun syncEvents()
 }
 
 @Service
@@ -29,7 +38,9 @@ class GoogleCalendarManager(
     private val transport: NetHttpTransport,
     private val gsonFactory: GsonFactory,
     private val orderService: OrderService,
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val personService: PersonService,
+    private val rsvpService: RSVPService
 ) : GoogleCalendarService {
 
     private val log = KotlinLogging.logger { }
@@ -62,9 +73,8 @@ class GoogleCalendarManager(
         log.debug { "Sending new event" }
         val service = getService(event)
         val gcalEvent = buildNewInvite(event)
-        log.info { "BUILT: $gcalEvent" }
         val newEvent =
-            service.events().insert("primary", buildNewInvite(event)).setSendUpdates("all")
+            service.events().insert("primary", gcalEvent).setSendUpdates("all")
                 .execute()
         event.calendarEventId = newEvent.id
         eventRepository.save(event)
@@ -103,7 +113,50 @@ class GoogleCalendarManager(
         }
     }
 
-    private fun syncEvents() {
-        TODO("Not implemented yet")
+    @Scheduled(fixedRate = 30, timeUnit = TimeUnit.MINUTES, initialDelay = 0)
+    @Transactional
+    override fun syncEvents() {
+        log.debug { "Syncing calendar events" }
+        val toSync = eventRepository.getAllByDateAfter(Timestamp.from(Instant.now()))
+        if (toSync.isEmpty()) {
+            log.debug { "No events to sync!" }
+        } else {
+            log.debug { "Syncing ${toSync.size} event" }
+        }
+
+        toSync.forEach { event ->
+            log.trace { "Syncing event ${event.id}" }
+            val service = try {
+                getService(event)
+            } catch (e: IllegalStateException) {
+                log.warn { "Could not sync event ${event.id}: ${e.message}" }
+                return@forEach
+            }
+            val calendarEvent = service.events().get("primary", event.calendarEventId).execute()
+            log.trace { "Received event ${calendarEvent.id}" }
+            calendarEvent.attendees.forEach attendees@{ eventAttendee ->
+                val person = personService.getByEmail(eventAttendee.email)
+                if (person == null) {
+                    log.trace { "No person found for ${eventAttendee.email}" }
+                    return@attendees
+                } else {
+                    log.trace { "Mapped ${eventAttendee.email} to person ${person.discordUserId}" }
+                }
+
+                val response = when (eventAttendee.responseStatus) {
+                    "needsAction" -> RSVPType.MAYBE
+                    "declined" -> RSVPType.NO
+                    "tentative" -> RSVPType.MAYBE
+                    "accepted" -> RSVPType.YES
+                    else -> null
+                }
+                log.trace { "mapped response ${eventAttendee.responseStatus} to $response" }
+                if (response == null) {
+                    log.trace { "Unknown response status ${eventAttendee.responseStatus} for ${eventAttendee.email}" }
+                    return@attendees
+                }
+                rsvpService.recordRSVP(event, person, response, RSVPSource.GOOGLE_CALENDAR)
+            }
+        }
     }
 }

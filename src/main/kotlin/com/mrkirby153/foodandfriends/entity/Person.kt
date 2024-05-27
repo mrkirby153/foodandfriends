@@ -21,4 +21,5 @@ class Person(
 interface PersonRepository : JpaRepository<Person, String> {
 
     fun getByDiscordUserId(discordUserId: Long): Person?
+    fun getByEmail(email: String): Person?
 }

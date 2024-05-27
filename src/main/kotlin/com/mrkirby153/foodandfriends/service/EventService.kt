@@ -5,6 +5,7 @@ import com.mrkirby153.botcore.builder.message
 import com.mrkirby153.botcore.coroutine.await
 import com.mrkirby153.foodandfriends.entity.Event
 import com.mrkirby153.foodandfriends.entity.EventRepository
+import com.mrkirby153.foodandfriends.entity.RSVPSource
 import com.mrkirby153.foodandfriends.entity.RSVPType
 import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
@@ -37,6 +38,8 @@ interface EventService {
     fun getByMessage(messageId: Long): Event?
 
     fun setLocation(event: Event, location: String)
+
+    suspend fun createAndPostNextEvent(schedule: Schedule): Event
 }
 
 data class EventLocationChangeEvent(val event: Event, val location: String)
@@ -90,6 +93,8 @@ class EventManager(
         val date = Timestamp.from(nextOccurrence)
         val existing = eventRepository.getByDateAndSchedule(date, schedule)
         if (existing != null) {
+            schedule.activeEvent = existing
+            scheduleRepository.save(schedule)
             return existing
         }
         val event = Event(date = date)
@@ -108,6 +113,13 @@ class EventManager(
         event.location = location
         val new = eventRepository.save(event)
         applicationEventPublisher.publishEvent(EventLocationChangeEvent(new, location))
+    }
+
+    @Transactional
+    override suspend fun createAndPostNextEvent(schedule: Schedule): Event {
+        val nextEvent = createNextEvent(schedule)
+        postEvent(nextEvent)
+        return nextEvent
     }
 
     @EventListener
@@ -130,7 +142,11 @@ class EventManager(
         }
         return message {
             text {
-                append(event.schedule!!.message)
+                appendLine(event.schedule!!.message)
+                if (event.location != null) {
+                    appendLine()
+                    appendLine("Location: ${event.location}")
+                }
             }
             if (event.attendees.isNotEmpty())
                 embed {
@@ -139,10 +155,12 @@ class EventManager(
                         rsvps.forEach { (user, rsvps) ->
                             appendLine(
                                 "${user.asMention}: ${
-                                    rsvps.joinToString(" / ") {
-                                        getRsvpEmoji(
+                                    rsvps.sortedBy { it.rsvpSource }.joinToString(" / ") {
+                                        val emoji = getRsvpEmoji(
                                             it.type
                                         )
+                                        val abbrev = getProviderAbbreviation(it.rsvpSource)
+                                        "$abbrev $emoji"
                                     }
                                 }"
                             )
@@ -159,5 +177,10 @@ class EventManager(
         RSVPType.YES -> "✅"
         RSVPType.NO -> "❌"
         RSVPType.MAYBE -> "❓"
+    }
+
+    private fun getProviderAbbreviation(source: RSVPSource) = when (source) {
+        RSVPSource.GOOGLE_CALENDAR -> "G"
+        RSVPSource.REACTION -> "D"
     }
 }

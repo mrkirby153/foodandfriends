@@ -18,6 +18,7 @@ interface PersonService {
     fun getOrCreate(user: User) = getOrCreate(user.idLong)
 
     fun getOrCreate(userId: Long): Person
+    fun getByEmail(email: String): Person?
 }
 
 
@@ -50,6 +51,10 @@ class PersonManager(
                 discordUserId = userId
             )
         )
+    }
+
+    override fun getByEmail(email: String): Person? {
+        return personRepository.getByEmail(email)
     }
 
 }
