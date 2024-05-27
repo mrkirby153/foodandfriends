@@ -2,17 +2,15 @@ package com.mrkirby153.foodandfriends.entity
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
-import jakarta.persistence.EnumType
-import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.OneToOne
 import jakarta.persistence.Table
 import me.mrkirby153.kcutils.ulid.generateUlid
 import org.springframework.data.jpa.repository.JpaRepository
 import java.time.Instant
-import java.util.Calendar
 
 
 enum class DayOfWeek {
@@ -38,6 +36,9 @@ class Schedule(
     @OneToOne
     @JoinColumn(name = "order_id")
     var order: Order? = null,
+
+    @Column(name = "calendar_user")
+    var calendarUser: Long = 0
 ) {
 
     @OneToMany(mappedBy = "schedule")
@@ -51,6 +52,19 @@ class Schedule(
 
     @Column(name = "message")
     var message: String = ""
+
+    @ManyToOne
+    @JoinColumn(name = "active_event")
+    var activeEvent: Event? = null
+        get() {
+            if (field == null) {
+                return null
+            }
+            if (field!!.date.toInstant().isBefore(Instant.now())) {
+                return null
+            }
+            return field
+        }
 }
 
 interface ScheduleRepository : JpaRepository<Schedule, String> {

@@ -2,6 +2,7 @@ package com.mrkirby153.foodandfriends.entity
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
@@ -28,8 +29,10 @@ class Event(
     @JoinColumn(name = "schedule_id")
     var schedule: Schedule? = null
 
+    var location: String? = ""
+
     @OneToMany(mappedBy = "event")
-    lateinit var attendees: MutableList<RSVP>
+    var attendees: MutableList<RSVP> = mutableListOf()
 }
 
 interface EventRepository : JpaRepository<Event, String> {

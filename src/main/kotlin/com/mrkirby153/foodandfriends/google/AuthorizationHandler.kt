@@ -15,7 +15,9 @@ interface AuthorizationHandler {
 
     fun authorize(user: User, code: String, force: Boolean = false): Credential
 
-    fun getAuthorization(user: User): Credential?
+    fun getAuthorization(user: User) = getAuthorization(user.idLong)
+
+    fun getAuthorization(user: Long): Credential?
 
     fun getAuthorizationUrl(user: User): String
 
@@ -51,22 +53,9 @@ class AuthorizationManager(
         return flow.createAndStoreCredential(resp, user.id)
     }
 
-    override fun getAuthorization(user: User): Credential? {
+    override fun getAuthorization(user: Long): Credential? {
         val credential =
-            flow.loadCredential(user.id) ?: return null
-        credential.refreshListeners.add(object : CredentialRefreshListener {
-            override fun onTokenResponse(credential: Credential, tokenResponse: TokenResponse) {
-                log.debug { "Persisting token after refresh for $user" }
-                flow.createAndStoreCredential(tokenResponse, user.id)
-            }
-
-            override fun onTokenErrorResponse(
-                credential: Credential?,
-                tokenErrorResponse: TokenErrorResponse?
-            ) {
-                log.warn { "RefreshListener failed with $tokenErrorResponse" }
-            }
-        })
+            flow.loadCredential(user.toString()) ?: return null
 
         if (credential.refreshToken != null || credential.expiresInSeconds == null || credential.expiresInSeconds > 60) {
             if (credential.expiresInSeconds < 60) {

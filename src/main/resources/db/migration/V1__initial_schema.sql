@@ -19,12 +19,14 @@ CREATE TABLE schedule_order
 CREATE TABLE schedule
 (
     id                varchar(255) not null primary key,
+    calendar_user     bigint,
     post_day_of_week  int          default 0,
     post_time         varchar(255) not null,
     channel           bigint       not null,
     order_id          varchar(255) default null references schedule_order (id),
     event_day_of_week int          default 0,
     event_time        varchar(255) not null,
+    active_event      varchar(255),
     message           text
 );
 
@@ -41,7 +43,8 @@ CREATE TABLE event
     discord_message_id bigint,
     calendar_event_id  varchar(255),
     date               timestamp,
-    schedule_id        varchar(255) references schedule (id)
+    schedule_id        varchar(255) references schedule (id),
+    location           varchar(2048) default ''
 );
 
 CREATE TABLE rsvp

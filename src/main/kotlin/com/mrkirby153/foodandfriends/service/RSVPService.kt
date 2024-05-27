@@ -26,7 +26,7 @@ const val THUMBS_DOWN = "\uD83D\uDC4E"
 const val SHRUG = "\uD83E\uDD37"
 
 data class RSVPEvent(
-    val eventId: String,
+    val event: Event,
     val rsvp: RSVP,
     val rsvpSource: RSVPSource,
     val rsvpType: RSVPType
@@ -69,13 +69,14 @@ class RSVPManager(
             event.attendees.remove(existing)
             rSVPRepository.delete(existing)
         }
-        val new = rSVPRepository.save(RSVP(source, type).apply {
+        val new = rSVPRepository.saveAndFlush(RSVP(source, type).apply {
             this.person = person
             this.event = event
         })
         log.trace { "Creating RSVP with id ${new.id}" }
-        val newEvent = eventRepository.save(event)
-        eventPublisher.publishEvent(RSVPEvent(event.id, new, source, type))
+        event.attendees.add(new)
+        val newEvent = eventRepository.saveAndFlush(event)
+        eventPublisher.publishEvent(RSVPEvent(event, new, source, type))
         return newEvent
     }
 

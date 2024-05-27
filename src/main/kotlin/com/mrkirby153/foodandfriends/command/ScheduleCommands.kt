@@ -14,9 +14,9 @@ import com.mrkirby153.foodandfriends.entity.DayOfWeek
 import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
 import com.mrkirby153.foodandfriends.service.EventService
-import com.mrkirby153.foodandfriends.service.RSVPService
 import com.mrkirby153.foodandfriends.service.ScheduleService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.mrkirby153.kcutils.spring.coroutine.transaction
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
@@ -27,8 +27,7 @@ class ScheduleCommands(
     private val scheduleRepository: ScheduleRepository,
     private val scheduleService: ScheduleService,
     private val shardManager: ShardManager,
-    private val eventService: EventService,
-    private val rsvpService: RSVPService
+    private val eventService: EventService
 ) : ProvidesSlashCommands {
 
     private val scheduleAutocompleteName: (Schedule) -> String = {
@@ -63,6 +62,7 @@ class ScheduleCommands(
                     run {
                         val realChannel = channel() ?: this.channel as TextChannel
                         val schedule = scheduleService.createNew(
+                            user,
                             realChannel,
                             postDayOfWeek(),
                             postTime(),
@@ -104,10 +104,12 @@ class ScheduleCommands(
                         description = "The schedule to post"
                     }.required()
                     run {
-                        val event = eventService.createNextEvent(schedule())
-                        log.debug { "Next Event: ${event.id}" }
-                        eventService.postEvent(event)
-                        reply("Posted ${event.id}").await()
+                        transaction {
+                            val event = eventService.createNextEvent(schedule())
+                            log.debug { "Next Event: ${event.id}" }
+                            eventService.postEvent(event)
+                            reply("Posted ${event.id}").await()
+                        }
                     }
                 }
             }
