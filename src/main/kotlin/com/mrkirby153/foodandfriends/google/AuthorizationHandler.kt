@@ -1,9 +1,6 @@
 package com.mrkirby153.foodandfriends.google
 
 import com.google.api.client.auth.oauth2.Credential
-import com.google.api.client.auth.oauth2.CredentialRefreshListener
-import com.google.api.client.auth.oauth2.TokenErrorResponse
-import com.google.api.client.auth.oauth2.TokenResponse
 import com.google.api.client.auth.oauth2.TokenResponseException
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -19,7 +16,7 @@ interface AuthorizationHandler {
 
     fun getAuthorization(user: Long): Credential?
 
-    fun getAuthorizationUrl(user: User): String
+    fun getAuthorizationUrl(user: User, force: Boolean = false): String
 
     fun authorized(user: User): Boolean
 }
@@ -76,9 +73,12 @@ class AuthorizationManager(
         throw GoogleOAuthException.AuthorizationExpiredException("Token expired")
     }
 
-    override fun getAuthorizationUrl(user: User): String {
+    override fun getAuthorizationUrl(user: User, force: Boolean): String {
         return flow.newAuthorizationUrl().setRedirectUri(redirectUri).setAccessType("offline")
-            .build()
+            .apply {
+                if (force)
+                    setApprovalPrompt("force")
+            }.build()
     }
 
     override fun authorized(user: User): Boolean {
