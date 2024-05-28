@@ -14,6 +14,7 @@ import com.mrkirby153.foodandfriends.entity.RSVPType
 import com.mrkirby153.foodandfriends.google.AuthorizationHandler
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
+import okio.IOException
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -57,6 +58,32 @@ class GoogleCalendarManager(
             // Create a new invite
             createCalendarEvent(locationChangeEvent.event)
         }
+    }
+
+    @EventListener
+    fun onTimeChange(timeChangeEvent: EventTimeChangeEvent) {
+        log.debug { "Processing time change event, new time ${timeChangeEvent.newTime}" }
+        val existing = getCalendarEvent(timeChangeEvent.event) ?: return
+        val service = try {
+            getService(timeChangeEvent.event)
+        } catch (e: Exception) {
+            log.warn(e) { "Could not process time change event" }
+            return
+        }
+        val existingCalendarEvent = try {
+            service.events().get("primary", existing.id).execute() ?: return
+        } catch (e: IOException) {
+            log.warn(e) { "Could not retrieve existing event" }
+            return
+        }
+        existingCalendarEvent.start =
+            EventDateTime().setDateTime(DateTime(timeChangeEvent.event.date))
+                .setTimeZone("America/Los_Angeles")
+        val endTime = timeChangeEvent.event.date.toInstant().plus(1, ChronoUnit.HOURS)
+        existingCalendarEvent.end = EventDateTime().setDateTime(DateTime(endTime.toEpochMilli()))
+            .setTimeZone("America/Los_Angeles")
+        val resp = service.events().update("primary", existing.id, existingCalendarEvent).execute()
+        log.debug { "Updated the time for the new event! $resp" }
     }
 
     override fun getCalendarEvent(event: Event): GoogleCalendarEvent? {

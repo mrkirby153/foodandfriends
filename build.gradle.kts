@@ -44,7 +44,7 @@ dependencies {
     implementation("net.dv8tion:JDA:5.0.0-beta.24")
     implementation("io.github.oshai:kotlin-logging-jvm:6.0.3")
 
-    implementation("com.google.api-client:google-api-client:2.5.1")
+    implementation("com.google.api-client:google-api-client:1.35.2")
     implementation("com.google.oauth-client:google-oauth-client:1.36.0")
     implementation("com.google.apis:google-api-services-calendar:v3-rev411-1.25.0")
 

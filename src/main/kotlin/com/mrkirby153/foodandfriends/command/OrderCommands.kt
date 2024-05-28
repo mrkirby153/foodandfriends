@@ -14,6 +14,7 @@ import com.mrkirby153.foodandfriends.service.OrderService
 import com.mrkirby153.foodandfriends.service.PersonService
 import com.mrkirby153.foodandfriends.service.ScheduleService
 import me.mrkirby153.kcutils.spring.coroutine.transaction
+import net.dv8tion.jda.api.Permission
 import org.springframework.stereotype.Component
 
 @Component
@@ -29,6 +30,7 @@ class OrderCommands(
     override fun registerSlashCommands(executor: DslCommandExecutor) {
         executor.registerCommands {
             slashCommand("order") {
+                defaultPermissions(Permission.MANAGE_SERVER)
                 subCommand("list") {
                     run {
                         transaction {

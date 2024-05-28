@@ -4,12 +4,14 @@ import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.command.slashcommand.dsl.ProvidesSlashCommands
 import com.mrkirby153.botcore.command.slashcommand.dsl.slashCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.subCommand
+import com.mrkirby153.botcore.command.slashcommand.dsl.types.boolean
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
 import com.mrkirby153.botcore.coroutine.await
 import com.mrkirby153.foodandfriends.google.AuthorizationHandler
 import com.mrkirby153.foodandfriends.google.GoogleOAuthException
 import com.mrkirby153.foodandfriends.service.GoogleCalendarService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import net.dv8tion.jda.api.Permission
 import org.springframework.stereotype.Component
 
 @Component
@@ -23,6 +25,7 @@ class GoogleCommands(
     override fun registerSlashCommands(executor: DslCommandExecutor) {
         executor.registerCommands {
             slashCommand("sync-calendar") {
+                defaultPermissions(Permission.MANAGE_SERVER)
                 run {
                     defer(true) {
                         googleCalendarService.syncEvents()
@@ -31,6 +34,7 @@ class GoogleCommands(
                 }
             }
             slashCommand("oauth") {
+                defaultPermissions(Permission.MANAGE_SERVER)
                 subCommand("check-auth") {
                     run {
                         if (authorizationHandler.authorized(user)) {
@@ -52,12 +56,15 @@ class GoogleCommands(
                         name = "code"
                         description = "The oauth callback code"
                     }.optional()
+                    val force by boolean {
+                        description = "Force a reauth (Retrieves a refresh token)"
+                    }.optional(false)
                     run {
                         val code = codeParam()
                         if (code != null) {
                             log.debug { "Validating code!" }
                             try {
-                                authorizationHandler.authorize(user, code)
+                                authorizationHandler.authorize(user, code, force())
                                 reply("Authorized!").setEphemeral(true).await()
                             } catch (e: GoogleOAuthException.AuthenticationFailedException) {
                                 reply("Failed to authenticate you. is your code correct?").setEphemeral(

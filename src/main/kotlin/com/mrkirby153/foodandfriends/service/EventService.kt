@@ -39,10 +39,13 @@ interface EventService {
 
     fun setLocation(event: Event, location: String)
 
+    fun setTime(event: Event, timestamp: Timestamp)
+
     suspend fun createAndPostNextEvent(schedule: Schedule): Event
 }
 
 data class EventLocationChangeEvent(val event: Event, val location: String)
+data class EventTimeChangeEvent(val event: Event, val newTime: Timestamp)
 
 @Service
 class EventManager(
@@ -113,6 +116,12 @@ class EventManager(
         event.location = location
         val new = eventRepository.save(event)
         applicationEventPublisher.publishEvent(EventLocationChangeEvent(new, location))
+    }
+
+    override fun setTime(event: Event, timestamp: Timestamp) {
+        event.date = timestamp
+        val new = eventRepository.save(event)
+        applicationEventPublisher.publishEvent(EventTimeChangeEvent(new, timestamp))
     }
 
     @Transactional

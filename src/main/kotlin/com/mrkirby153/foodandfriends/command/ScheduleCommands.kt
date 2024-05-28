@@ -17,6 +17,7 @@ import com.mrkirby153.foodandfriends.service.EventService
 import com.mrkirby153.foodandfriends.service.ScheduleService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.mrkirby153.kcutils.spring.coroutine.transaction
+import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
@@ -40,6 +41,7 @@ class ScheduleCommands(
     override fun registerSlashCommands(executor: DslCommandExecutor) {
         executor.registerCommands {
             slashCommand("schedule") {
+                defaultPermissions(Permission.MANAGE_SERVER)
                 subCommand("add") {
                     val postDayOfWeek by enum<DayOfWeek> {
                         name = "post_day"
