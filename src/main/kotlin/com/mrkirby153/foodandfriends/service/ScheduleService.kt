@@ -136,8 +136,9 @@ class ScheduleManager(
         schedule.eventDayOfWeek = eventDay
         schedule.eventTime = eventTime
         schedule.message = message
+        val new = scheduleRepository.save(schedule)
         scheduleNextPost()
-        return scheduleRepository.save(schedule)
+        return new
     }
 
     @Transactional
