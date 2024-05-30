@@ -162,17 +162,19 @@ class EventManager(
                     title = "Attendees"
                     description = buildString {
                         rsvps.forEach { (user, rsvps) ->
-                            appendLine(
-                                "${user.asMention}: ${
-                                    rsvps.sortedBy { it.rsvpSource }.joinToString(" / ") {
-                                        val emoji = getRsvpEmoji(
-                                            it.type
-                                        )
-                                        val abbrev = getProviderAbbreviation(it.rsvpSource)
-                                        "$abbrev $emoji"
-                                    }
-                                }"
-                            )
+                            val rsvpsMatch = rsvps.map { it.type }.toSet().size == 1
+                            append(user.asMention)
+                            append(": ")
+                            if (rsvpsMatch) {
+                                append(getRsvpEmoji(rsvps.first().type))
+                            } else {
+                                append(rsvps.sortedBy { it.rsvpSource }.joinToString(" / ") {
+                                    val emoji = getRsvpEmoji(it.type)
+                                    val abbrev = getProviderAbbreviation(it.rsvpSource)
+                                    "$abbrev $emoji"
+                                })
+                            }
+                            appendLine()
                         }
                     }
                     color {
