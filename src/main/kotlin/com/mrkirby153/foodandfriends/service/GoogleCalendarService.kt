@@ -144,7 +144,8 @@ class GoogleCalendarManager(
     @Transactional
     override fun syncEvents() {
         log.debug { "Syncing calendar events" }
-        val toSync = eventRepository.getAllByDateAfter(Timestamp.from(Instant.now()))
+        val toSync =
+            eventRepository.getAllByDateAfterAndCalendarEventIdIsNotNull(Timestamp.from(Instant.now()))
         if (toSync.isEmpty()) {
             log.debug { "No events to sync!" }
         } else {

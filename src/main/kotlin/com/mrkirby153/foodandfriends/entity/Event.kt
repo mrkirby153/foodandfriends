@@ -40,5 +40,5 @@ interface EventRepository : JpaRepository<Event, String> {
 
     fun getByDiscordMessageId(discordMessageId: Long): Event?
 
-    fun getAllByDateAfter(date: Timestamp): List<Event>
+    fun getAllByDateAfterAndCalendarEventIdIsNotNull(date: Timestamp): List<Event>
 }

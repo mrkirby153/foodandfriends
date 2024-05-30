@@ -75,7 +75,7 @@ class GoogleCommands(
                             }
                         } else {
                             log.debug { "Not authorized!" }
-                            reply("Click [this](${authorizationHandler.getAuthorizationUrl(user)}) link to get your authorization code!").setEphemeral(
+                            reply("Click [this](${authorizationHandler.getAuthorizationUrl(user, force())}) link to get your authorization code!").setEphemeral(
                                 true
                             ).await()
                         }
