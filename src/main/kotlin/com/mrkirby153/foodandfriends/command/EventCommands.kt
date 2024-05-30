@@ -88,7 +88,7 @@ class EventCommands(
 
 
                     val sdf = SimpleDateFormat("yyyy-MM-dd")
-                    val calendar = Calendar.getInstance()
+                    val calendar = Calendar.getInstance(realSchedule.timezone)
                     calendar.time = activeEvent.date
 
                     val timestamp = try {
@@ -96,7 +96,7 @@ class EventCommands(
                     } catch (e: ParseException) {
                         throw CommandException("Could not parse `${day()}` as a date")
                     }
-                    val parsedCalendar = Calendar.getInstance()
+                    val parsedCalendar = Calendar.getInstance(realSchedule.timezone)
                     parsedCalendar.time = timestamp
 
                     log.info { "Parsed calendar: $parsedCalendar" }

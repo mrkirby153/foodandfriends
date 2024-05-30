@@ -12,6 +12,7 @@ import me.mrkirby153.kcutils.ulid.generateUlid
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import java.time.Instant
+import java.util.Calendar
 import java.util.TimeZone
 
 
@@ -65,7 +66,10 @@ class Schedule(
             if (field == null) {
                 return null
             }
-            if (field!!.date.toInstant().isBefore(Instant.now())) {
+            val event = field!!
+            val calendar = Calendar.getInstance(event.schedule?.timezone ?: TimeZone.getDefault())
+            calendar.time = event.date
+            if (calendar.toInstant().isBefore(Instant.now())) {
                 return null
             }
             return field
