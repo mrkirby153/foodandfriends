@@ -15,13 +15,13 @@ import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
 import com.mrkirby153.foodandfriends.service.EventService
 import com.mrkirby153.foodandfriends.service.ScheduleService
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.mrkirby153.kcutils.spring.coroutine.transaction
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
 import java.text.SimpleDateFormat
+import java.util.TimeZone
 
 @Component
 class ScheduleCommands(
@@ -36,13 +36,13 @@ class ScheduleCommands(
         "$channelName: ${it.eventTime} at ${it.eventDayOfWeek}"
     }
 
-    private val log = KotlinLogging.logger {}
-
     override fun registerSlashCommands(executor: DslCommandExecutor) {
         executor.registerCommands {
             slashCommand("schedule") {
                 defaultPermissions(Permission.MANAGE_SERVER)
                 subCommand("add") {
+                    val timezone by string {
+                    }.required()
                     val postDayOfWeek by enum<DayOfWeek> {
                         name = "post_day"
                     }.required()
@@ -63,6 +63,8 @@ class ScheduleCommands(
 
                     run {
                         val realChannel = channel() ?: this.channel as TextChannel
+                        val timezone = TimeZone.getTimeZone(timezone())
+
                         val schedule = scheduleService.createNew(
                             user,
                             realChannel,
@@ -70,7 +72,8 @@ class ScheduleCommands(
                             postTime(),
                             eventDayOfWeek(),
                             eventTime(),
-                            message()
+                            message(),
+                            timezone
                         )
                         reply("Created a new schedule with id ${schedule.id}!").await()
                     }
@@ -112,13 +115,23 @@ class ScheduleCommands(
                     }
                 }
                 subCommand("get_next") {
+                    val schedule by scheduleRepository.argument(
+                        enableAutocomplete = true,
+                        autocompleteName = scheduleAutocompleteName
+                    ).optional()
                     run {
                         defer(true) {
-                            val next = scheduleService.getNextPostTime()
-                                ?: throw CommandException("nothing next!")
-                            val sdf = SimpleDateFormat("MM-dd-yy HH:mm:ss")
-                            it.editOriginal("Next post time is ${sdf.format(next.first.toEpochMilli())} for ${next.second.id}")
-                                .await()
+                            val realSchedule = schedule()
+                            if (realSchedule != null) {
+                                val nextEvent = scheduleService.getNextOccurrence(realSchedule)
+                                it.editOriginal("Next occurrence is <t:${nextEvent.toEpochMilli() / 1000}>").await()
+                            } else {
+                                val next = scheduleService.getNextPostTime()
+                                    ?: throw CommandException("nothing next!")
+                                val sdf = SimpleDateFormat("MM-dd-yy HH:mm:ss")
+                                it.editOriginal("Next post time is ${sdf.format(next.first.toEpochMilli())} (<t:${next.first.toEpochMilli() / 1000}>) for ${next.second.id}")
+                                    .await()
+                            }
                         }
                     }
                 }
@@ -132,6 +145,25 @@ class ScheduleCommands(
                     run {
                         val event = eventService.createAndPostNextEvent(schedule())
                         reply("Posted ${event.id}").await()
+                    }
+                }
+
+                subCommand("timezone") {
+                    val schedule by scheduleRepository.argument(
+                        enableAutocomplete = true,
+                        autocompleteName = scheduleAutocompleteName
+                    ).required()
+                    val timezone by string {
+
+                    }.optional()
+                    run {
+                        if (timezone() != null) {
+                            val newTimezone = TimeZone.getTimeZone(timezone())
+                            scheduleService.setTimezone(schedule(), newTimezone)
+                            reply("Set the timezone for ${schedule().id} to `${newTimezone.displayName}`").await()
+                        } else {
+                            reply("${schedule().id}'s timezone is `${schedule().timezone.displayName}`").await()
+                        }
                     }
                 }
             }

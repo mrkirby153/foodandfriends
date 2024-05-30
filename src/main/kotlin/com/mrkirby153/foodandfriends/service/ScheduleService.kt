@@ -14,13 +14,13 @@ import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
 import org.springframework.context.annotation.Lazy
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.TaskScheduler
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
 import org.springframework.stereotype.Service
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Calendar
 import java.util.Date
+import java.util.TimeZone
 import java.util.concurrent.ScheduledFuture
 
 interface ScheduleService {
@@ -36,7 +36,8 @@ interface ScheduleService {
         postTime: String,
         eventDay: DayOfWeek,
         eventTime: String,
-        message: String
+        message: String,
+        timezone: TimeZone
     ): Schedule
 
     fun delete(schedule: Schedule) {
@@ -50,14 +51,15 @@ interface ScheduleService {
     fun link(schedule: Schedule, order: Order): Schedule
 
     fun unlink(schedule: Schedule): Schedule
+
+    fun setTimezone(schedule: Schedule, timezone: TimeZone): Schedule
 }
 
 @Service
 class ScheduleManager(
     private val scheduleRepository: ScheduleRepository,
     @Lazy private val eventService: EventService,
-    private val taskExecutor: TaskScheduler,
-    taskScheduler: ThreadPoolTaskScheduler
+    private val taskExecutor: TaskScheduler
 ) : ScheduleService {
 
     private val calendarDayMap = mutableMapOf<Int, DayOfWeek>()
@@ -78,38 +80,58 @@ class ScheduleManager(
 
 
     override fun getNextPostTime(): Pair<Instant, Schedule>? {
-        val now = Calendar.getInstance()
-        val currentDayOfWeek = calendarDayMap[Calendar.getInstance().get(Calendar.DAY_OF_WEEK)]
-            ?: error("No current day of week")
-        log.debug { "it is currently $currentDayOfWeek" }
-        val calendar = Calendar.getInstance()
-        do {
-            val day = calendarDayMap[calendar.get(Calendar.DAY_OF_WEEK)]
-            log.debug { "Checking for events on $day" }
-            if (day != null) {
-                val toPost = scheduleRepository.getByPostDayOfWeek(day)
-                log.debug { "Found ${toPost.size} events" }
-                if (toPost.isNotEmpty()) {
-                    val first = toPost.associateBy {
-                        val eventCalendar = calendar.clone() as Calendar
-                        val hour = it.postTime.split(":")[0].toInt()
-                        val minute = it.postTime.split(":")[1].toInt()
-                        eventCalendar.set(Calendar.HOUR_OF_DAY, hour)
-                        eventCalendar.set(Calendar.MINUTE, minute)
-                        eventCalendar.set(Calendar.SECOND, 0)
-                        eventCalendar
-                    }.entries.filter {
-                        it.value.activeEvent == null && it.key.toInstant().isAfter(Instant.now())
-                    }.minByOrNull { (k, _) -> k }
-                    log.debug { "Next event is ${first?.value?.message}" }
-                    if (first != null) {
-                        return Pair(first.key.toInstant(), first.value)
+        val timezonesToConsider = scheduleRepository.getTimezones()
+        log.debug { "There are ${timezonesToConsider.size} timezones to consider" }
+        var earliest: Pair<Instant, Schedule>? = null
+        timezonesToConsider.forEach { timezone ->
+            log.trace { "Processing timezone ${timezone.id}" }
+            val now = Calendar.getInstance(timezone)
+            val currentDayOfWeek =
+                calendarDayMap[now.get(Calendar.DAY_OF_WEEK)] ?: error("No current day of week")
+            log.debug { "It is currently $currentDayOfWeek in ${timezone.id}" }
+            val calendar = Calendar.getInstance(timezone)
+            do {
+                val day = calendarDayMap[calendar.get(Calendar.DAY_OF_WEEK)]
+                log.trace { "Checking for events on $day in $timezone" }
+                if (day != null) {
+                    val toPost = scheduleRepository.getByPostDayOfWeekAndTimezone(day, timezone)
+                    log.debug { "Found ${toPost.size} events" }
+                    if (toPost.isNotEmpty()) {
+                        val isToday =
+                            calendar.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
+                        val first = toPost.associateBy {
+                            val eventCalendar = calendar.clone() as Calendar
+                            val hour = it.postTime.split(":")[0].toInt()
+                            val minute = it.postTime.split(":")[1].toInt()
+                            eventCalendar.set(Calendar.HOUR_OF_DAY, hour)
+                            eventCalendar.set(Calendar.MINUTE, minute)
+                            eventCalendar.set(Calendar.SECOND, 0)
+                            eventCalendar.set(Calendar.MILLISECOND, 0)
+
+                            if (eventCalendar.toInstant().isBefore(now.toInstant()) && isToday) {
+                                log.debug { "Event is today and before now, adding 7 days..." }
+                                eventCalendar.add(Calendar.DAY_OF_YEAR, 7)
+                            }
+
+                            eventCalendar
+                        }.entries.filter {
+                            it.value.activeEvent == null && it.key.toInstant()
+                                .isAfter(Instant.now())
+                        }.minByOrNull { (k, _) -> k }
+                        log.debug { "Next event is ${first?.value?.message}" }
+                        if (first != null) {
+                            if (earliest == null || earliest!!.first.isAfter(first.key.toInstant())) {
+                                log.debug { "new earliest event!" }
+                                earliest = Pair(first.key.toInstant(), first.value)
+                            }
+                        }
                     }
                 }
-            }
-            calendar.add(Calendar.DAY_OF_WEEK, 1)
-        } while (calendar.get(Calendar.DAY_OF_WEEK) != now.get(Calendar.DAY_OF_WEEK))
-        return null
+                calendar.add(Calendar.DAY_OF_WEEK, 1)
+            } while (calendar.get(Calendar.DAY_OF_WEEK) != now.get(Calendar.DAY_OF_WEEK))
+        }
+        log.debug { "Earliest schedule is: ${earliest?.second?.id}" }
+        return earliest
     }
 
     override suspend fun postScheduleMessage(schedule: Schedule) {
@@ -124,7 +146,8 @@ class ScheduleManager(
         postTime: String,
         eventDay: DayOfWeek,
         eventTime: String,
-        message: String
+        message: String,
+        timezone: TimeZone
     ): Schedule {
         val schedule =
             Schedule(
@@ -147,7 +170,7 @@ class ScheduleManager(
     }
 
     override fun getNextOccurrence(schedule: Schedule): Instant {
-        val calendar = Calendar.getInstance()
+        val calendar = Calendar.getInstance(schedule.timezone)
         while (calendarDayMap[calendar.get(Calendar.DAY_OF_WEEK)] != schedule.eventDayOfWeek) {
             calendar.add(Calendar.DAY_OF_WEEK, 1)
         }
@@ -171,11 +194,17 @@ class ScheduleManager(
         return scheduleRepository.save(schedule)
     }
 
+    override fun setTimezone(schedule: Schedule, timezone: TimeZone): Schedule {
+        schedule.timezone = timezone
+        val newSchedule = scheduleRepository.save(schedule)
+        scheduleNextPost()
+        return newSchedule
+    }
+
     @EventListener
     fun onReady(event: BotReadyEvent) {
         scheduleNextPost()
     }
-
 
     private fun scheduleNextPost() {
         val next = getNextPostTime()

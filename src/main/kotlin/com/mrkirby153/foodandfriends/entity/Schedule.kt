@@ -10,7 +10,9 @@ import jakarta.persistence.OneToOne
 import jakarta.persistence.Table
 import me.mrkirby153.kcutils.ulid.generateUlid
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
 import java.time.Instant
+import java.util.TimeZone
 
 
 enum class DayOfWeek {
@@ -38,7 +40,10 @@ class Schedule(
     var order: Order? = null,
 
     @Column(name = "calendar_user")
-    var calendarUser: Long = 0
+    var calendarUser: Long = 0,
+
+    @Column(name = "timezone")
+    var timezone: TimeZone = TimeZone.getTimeZone("UTC")
 ) {
 
     @OneToMany(mappedBy = "schedule")
@@ -69,5 +74,8 @@ class Schedule(
 
 interface ScheduleRepository : JpaRepository<Schedule, String> {
 
-    fun getByPostDayOfWeek(postDayOfWeek: DayOfWeek): List<Schedule>
+    fun getByPostDayOfWeekAndTimezone(postDayOfWeek: DayOfWeek, timezone: TimeZone): List<Schedule>
+
+    @Query("SELECT DISTINCT(a.timezone) FROM Schedule a")
+    fun getTimezones(): List<TimeZone>
 }

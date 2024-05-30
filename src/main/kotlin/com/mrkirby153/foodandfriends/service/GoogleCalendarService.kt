@@ -78,10 +78,10 @@ class GoogleCalendarManager(
         }
         existingCalendarEvent.start =
             EventDateTime().setDateTime(DateTime(timeChangeEvent.event.date))
-                .setTimeZone("America/Los_Angeles")
+                .setTimeZone(timeChangeEvent.event.schedule?.timezone?.id ?: "UTC")
         val endTime = timeChangeEvent.event.date.toInstant().plus(1, ChronoUnit.HOURS)
         existingCalendarEvent.end = EventDateTime().setDateTime(DateTime(endTime.toEpochMilli()))
-            .setTimeZone("America/Los_Angeles")
+            .setTimeZone(timeChangeEvent.event.schedule?.timezone?.id ?: "UTC")
         val resp = service.events().update("primary", existing.id, existingCalendarEvent).execute()
         log.debug { "Updated the time for the new event! $resp" }
     }
@@ -126,10 +126,11 @@ class GoogleCalendarManager(
             location = event.location
             summary = "Food & Friends"
             start =
-                EventDateTime().setDateTime(DateTime(event.date)).setTimeZone("America/Los_Angeles")
+                EventDateTime().setDateTime(DateTime(event.date))
+                    .setTimeZone(event.schedule?.timezone?.id ?: "UTC")
             val endTime = event.date.toInstant().plus(1, ChronoUnit.HOURS)
             end = EventDateTime().setDateTime(DateTime(endTime.toEpochMilli()))
-                .setTimeZone("America/Los_Angeles")
+                .setTimeZone(event.schedule?.timezone?.id ?: "UTC")
 
             val invites = event.schedule?.order?.run { orderService.getPeople(this) } ?: emptyList()
             val attendees = invites.filter { it.email != null }
