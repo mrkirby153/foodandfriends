@@ -10,6 +10,9 @@ import jakarta.persistence.Table
 import me.mrkirby153.kcutils.ulid.generateUlid
 import org.springframework.data.jpa.repository.JpaRepository
 import java.sql.Timestamp
+import java.time.Instant
+import java.util.Calendar
+import java.util.TimeZone
 
 
 @Entity
@@ -32,6 +35,13 @@ class Event(
 
     @OneToMany(mappedBy = "event")
     var attendees: MutableList<RSVP> = mutableListOf()
+
+
+    fun getTime(): Instant {
+        val calendar = Calendar.getInstance(schedule?.timezone ?: TimeZone.getTimeZone("UTC"))
+        calendar.time = this.date
+        return calendar.toInstant()
+    }
 }
 
 interface EventRepository : JpaRepository<Event, String> {

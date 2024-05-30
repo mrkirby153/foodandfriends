@@ -115,8 +115,12 @@ class ScheduleManager(
 
                             eventCalendar
                         }.entries.filter {
-                            it.value.activeEvent == null && it.key.toInstant()
-                                .isAfter(Instant.now())
+                            log.debug {
+                                "${it.value.id} has active event? ${it.value.activeEvent != null} and ${
+                                    it.key.toInstant().isAfter(Instant.now())
+                                }"
+                            }
+                            it.key.toInstant().isAfter(Instant.now()) && it.value.activeEvent?.getTime()?.isBefore(it.key.toInstant()) == true
                         }.minByOrNull { (k, _) -> k }
                         log.debug { "Next event is ${first?.value?.message}" }
                         if (first != null) {

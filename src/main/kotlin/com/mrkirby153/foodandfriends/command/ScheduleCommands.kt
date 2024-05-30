@@ -124,12 +124,14 @@ class ScheduleCommands(
                             val realSchedule = schedule()
                             if (realSchedule != null) {
                                 val nextEvent = scheduleService.getNextOccurrence(realSchedule)
-                                it.editOriginal("Next occurrence is <t:${nextEvent.toEpochMilli() / 1000}>").await()
+                                it.editOriginal("Next occurrence is <t:${nextEvent.toEpochMilli() / 1000}>")
+                                    .await()
                             } else {
                                 val next = scheduleService.getNextPostTime()
                                     ?: throw CommandException("nothing next!")
                                 val sdf = SimpleDateFormat("MM-dd-yy HH:mm:ss")
-                                it.editOriginal("Next post time is ${sdf.format(next.first.toEpochMilli())} (<t:${next.first.toEpochMilli() / 1000}>) for ${next.second.id}")
+                                val nextTime = scheduleService.getNextOccurrence(next.second)
+                                it.editOriginal("Next post time is ${sdf.format(next.first.toEpochMilli())} (<t:${next.first.toEpochMilli() / 1000}>) for ${next.second.id} (<t:${nextTime.toEpochMilli() / 1000}>)")
                                     .await()
                             }
                         }
