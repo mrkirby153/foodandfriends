@@ -9,6 +9,7 @@ import com.mrkirby153.foodandfriends.entity.RSVPSource
 import com.mrkirby153.foodandfriends.entity.RSVPType
 import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
+import com.mrkirby153.foodandfriends.extensions.toLocalTimestamp
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,7 @@ import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
 import java.awt.Color
 import java.sql.Timestamp
+import java.time.LocalDate
 
 interface EventService {
 
@@ -93,7 +95,7 @@ class EventManager(
 
     override fun createNextEvent(schedule: Schedule): Event {
         val nextOccurrence = scheduleService.getNextOccurrence(schedule)
-        val date = Timestamp.from(nextOccurrence)
+        val date = nextOccurrence.toLocalTimestamp(schedule.timezone.toZoneId())
         val existing = eventRepository.getByDateAndSchedule(date, schedule)
         if (existing != null) {
             schedule.activeEvent = existing
