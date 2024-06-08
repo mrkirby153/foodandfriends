@@ -26,7 +26,8 @@ import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
 import java.awt.Color
 import java.sql.Timestamp
-import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
 
 interface EventService {
 
@@ -41,13 +42,13 @@ interface EventService {
 
     fun setLocation(event: Event, location: String)
 
-    fun setTime(event: Event, timestamp: Timestamp)
+    fun setTime(event: Event, timestamp: Instant)
 
     suspend fun createAndPostNextEvent(schedule: Schedule): Event
 }
 
 data class EventLocationChangeEvent(val event: Event, val location: String)
-data class EventTimeChangeEvent(val event: Event, val newTime: Timestamp)
+data class EventTimeChangeEvent(val event: Event, val newTime: Instant)
 
 @Service
 class EventManager(
@@ -102,7 +103,7 @@ class EventManager(
             scheduleRepository.save(schedule)
             return existing
         }
-        val event = Event(date = date)
+        val event = Event(date = date, absoluteDate = Timestamp.from(nextOccurrence))
         event.schedule = schedule
         val newEvent = eventRepository.save(event)
         schedule.activeEvent = newEvent
@@ -120,8 +121,11 @@ class EventManager(
         applicationEventPublisher.publishEvent(EventLocationChangeEvent(new, location))
     }
 
-    override fun setTime(event: Event, timestamp: Timestamp) {
-        event.date = timestamp
+    override fun setTime(event: Event, timestamp: Instant) {
+        event.date = timestamp.toLocalTimestamp(
+            event.schedule?.timezone?.toZoneId() ?: ZoneId.systemDefault()
+        )
+        event.absoluteDate = Timestamp.from(timestamp)
         val new = eventRepository.save(event)
         applicationEventPublisher.publishEvent(EventTimeChangeEvent(new, timestamp))
     }

@@ -23,6 +23,8 @@ class Event(
     @Column(name = "calendar_event_id")
     var calendarEventId: String? = null,
     var date: Timestamp = Timestamp(System.currentTimeMillis()),
+    @Column(name = "absolute_date")
+    var absoluteDate: Timestamp = Timestamp(System.currentTimeMillis())
 ) {
     @Id
     val id: String = generateUlid()
@@ -50,5 +52,5 @@ interface EventRepository : JpaRepository<Event, String> {
 
     fun getByDiscordMessageId(discordMessageId: Long): Event?
 
-    fun getAllByDateAfterAndCalendarEventIdIsNotNull(date: Timestamp): List<Event>
+    fun getAllByAbsoluteDateAndCalendarEventIdIsNotNull(date: Timestamp): List<Event>
 }

@@ -16,7 +16,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
-import java.sql.Timestamp
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -73,21 +72,20 @@ class EventCommands(
                 val hour by int {
                     min = 0
                     max = 24
-                }.optional()
+                }.required()
                 val minute by int {
                     min = 0
                     max = 59
-                }.optional()
+                }.required()
 
                 run {
                     val realSchedule = schedule()
                     val activeEvent =
                         realSchedule.activeEvent ?: throw CommandException("No active event")
 
-                    val old = activeEvent.date.time
-
-
+                    val old = activeEvent.absoluteDate.time
                     val sdf = SimpleDateFormat("yyyy-MM-dd")
+                    sdf.timeZone = realSchedule.timezone
                     val calendar = Calendar.getInstance(realSchedule.timezone)
                     calendar.time = activeEvent.date
 
@@ -99,21 +97,17 @@ class EventCommands(
                     val parsedCalendar = Calendar.getInstance(realSchedule.timezone)
                     parsedCalendar.time = timestamp
 
-                    log.info { "Parsed calendar: $parsedCalendar" }
-                    log.info { "SDF: $timestamp" }
+                    log.debug { "Parsed calendar: $parsedCalendar" }
+                    log.debug { "SDF: $timestamp" }
 
                     calendar.set(Calendar.YEAR, parsedCalendar.get(Calendar.YEAR))
                     calendar.set(Calendar.DAY_OF_YEAR, parsedCalendar.get(Calendar.DAY_OF_YEAR))
-                    if (hour() != null) {
-                        calendar.set(Calendar.HOUR_OF_DAY, hour()!!)
-                    }
-                    if (minute() != null) {
-                        calendar.set(Calendar.MINUTE, minute()!!)
-                    }
-                    if(calendar.toInstant().isBefore(Instant.now())) {
+                    calendar.set(Calendar.HOUR_OF_DAY, hour())
+                    calendar.set(Calendar.MINUTE, minute())
+                    if (calendar.toInstant().isBefore(Instant.now())) {
                         throw CommandException("Cannot reschedule an event to the past; <t:${calendar.timeInMillis / 1000}>")
                     }
-                    eventService.setTime(activeEvent, Timestamp.from(calendar.toInstant()))
+                    eventService.setTime(activeEvent, calendar.toInstant())
                     reply(true) {
                         text {
                             append("Rescheduled from <t:${old / 1000}> to <t:${calendar.timeInMillis / 1000}>!")

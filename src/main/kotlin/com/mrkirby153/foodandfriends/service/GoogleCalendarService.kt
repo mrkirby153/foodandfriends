@@ -31,6 +31,8 @@ interface GoogleCalendarService {
     fun createCalendarEvent(event: Event): GoogleCalendarEvent?
 
     fun syncEvents()
+
+    fun syncEvent(event: Event)
 }
 
 @Service
@@ -146,7 +148,7 @@ class GoogleCalendarManager(
     override fun syncEvents() {
         log.debug { "Syncing calendar events" }
         val toSync =
-            eventRepository.getAllByDateAfterAndCalendarEventIdIsNotNull(Timestamp.from(Instant.now()))
+            eventRepository.getAllByAbsoluteDateAndCalendarEventIdIsNotNull(Timestamp.from(Instant.now()))
         if (toSync.isEmpty()) {
             log.debug { "No events to sync!" }
         } else {
@@ -154,38 +156,44 @@ class GoogleCalendarManager(
         }
 
         toSync.forEach { event ->
-            log.trace { "Syncing event ${event.id}" }
-            val service = try {
-                getService(event)
-            } catch (e: IllegalStateException) {
-                log.warn { "Could not sync event ${event.id}: ${e.message}" }
-                return@forEach
-            }
-            val calendarEvent = service.events().get("primary", event.calendarEventId).execute()
-            log.trace { "Received event ${calendarEvent.id}" }
-            calendarEvent.attendees.forEach attendees@{ eventAttendee ->
-                val person = personService.getByEmail(eventAttendee.email)
-                if (person == null) {
-                    log.trace { "No person found for ${eventAttendee.email}" }
-                    return@attendees
-                } else {
-                    log.trace { "Mapped ${eventAttendee.email} to person ${person.discordUserId}" }
-                }
+            syncEvent(event)
+        }
+    }
 
-                val response = when (eventAttendee.responseStatus) {
-                    "needsAction" -> RSVPType.MAYBE
-                    "declined" -> RSVPType.NO
-                    "tentative" -> RSVPType.MAYBE
-                    "accepted" -> RSVPType.YES
-                    else -> null
-                }
-                log.trace { "mapped response ${eventAttendee.responseStatus} to $response" }
-                if (response == null) {
-                    log.trace { "Unknown response status ${eventAttendee.responseStatus} for ${eventAttendee.email}" }
-                    return@attendees
-                }
-                rsvpService.recordRSVP(event, person, response, RSVPSource.GOOGLE_CALENDAR)
+    override fun syncEvent(event: Event) {
+        if (event.calendarEventId == null)
+            return
+        log.trace { "Syncing event ${event.id}" }
+        val service = try {
+            getService(event)
+        } catch (e: IllegalStateException) {
+            log.warn { "Could not sync event ${event.id}: ${e.message}" }
+            return
+        }
+        val calendarEvent = service.events().get("primary", event.calendarEventId).execute()
+        log.trace { "Received event ${calendarEvent.id}" }
+        calendarEvent.attendees.forEach attendees@{ eventAttendee ->
+            val person = personService.getByEmail(eventAttendee.email)
+            if (person == null) {
+                log.trace { "No person found for ${eventAttendee.email}" }
+                return@attendees
+            } else {
+                log.trace { "Mapped ${eventAttendee.email} to person ${person.discordUserId}" }
             }
+
+            val response = when (eventAttendee.responseStatus) {
+                "needsAction" -> RSVPType.MAYBE
+                "declined" -> RSVPType.NO
+                "tentative" -> RSVPType.MAYBE
+                "accepted" -> RSVPType.YES
+                else -> null
+            }
+            log.trace { "mapped response ${eventAttendee.responseStatus} to $response" }
+            if (response == null) {
+                log.trace { "Unknown response status ${eventAttendee.responseStatus} for ${eventAttendee.email}" }
+                return@attendees
+            }
+            rsvpService.recordRSVP(event, person, response, RSVPSource.GOOGLE_CALENDAR)
         }
     }
 }

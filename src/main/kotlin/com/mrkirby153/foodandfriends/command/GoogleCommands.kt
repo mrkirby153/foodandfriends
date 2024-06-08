@@ -5,8 +5,10 @@ import com.mrkirby153.botcore.command.slashcommand.dsl.ProvidesSlashCommands
 import com.mrkirby153.botcore.command.slashcommand.dsl.slashCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.subCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.boolean
+import com.mrkirby153.botcore.command.slashcommand.dsl.types.spring.argument
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
 import com.mrkirby153.botcore.coroutine.await
+import com.mrkirby153.foodandfriends.entity.EventRepository
 import com.mrkirby153.foodandfriends.google.AuthorizationHandler
 import com.mrkirby153.foodandfriends.google.GoogleOAuthException
 import com.mrkirby153.foodandfriends.service.GoogleCalendarService
@@ -17,7 +19,8 @@ import org.springframework.stereotype.Component
 @Component
 class GoogleCommands(
     private val authorizationHandler: AuthorizationHandler,
-    private val googleCalendarService: GoogleCalendarService
+    private val googleCalendarService: GoogleCalendarService,
+    private val eventRepository: EventRepository
 ) : ProvidesSlashCommands {
 
     private val log = KotlinLogging.logger { }
