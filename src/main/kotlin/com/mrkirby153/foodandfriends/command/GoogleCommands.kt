@@ -1,11 +1,12 @@
 package com.mrkirby153.foodandfriends.command
 
+import com.mrkirby153.botcore.command.slashcommand.dsl.CommandException
 import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.command.slashcommand.dsl.ProvidesSlashCommands
+import com.mrkirby153.botcore.command.slashcommand.dsl.messageContextCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.slashCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.subCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.boolean
-import com.mrkirby153.botcore.command.slashcommand.dsl.types.spring.argument
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
 import com.mrkirby153.botcore.coroutine.await
 import com.mrkirby153.foodandfriends.entity.EventRepository
@@ -27,6 +28,20 @@ class GoogleCommands(
 
     override fun registerSlashCommands(executor: DslCommandExecutor) {
         executor.registerCommands {
+            messageContextCommand("Sync Event") {
+                check {
+                    if (this.instance.member?.hasPermission(Permission.MANAGE_SERVER) == false) {
+                        fail("You do not have permission to perform this command")
+                    }
+                }
+                action {
+                    val hook = it.deferReply(true).await()
+                    val event = eventRepository.getByDiscordMessageId(it.target.idLong)
+                        ?: throw CommandException("Event not found. Are you sure this is an event message?")
+                    googleCalendarService.syncEvent(event)
+                    hook.editOriginal("Synced event ${event.id}").await()
+                }
+            }
             slashCommand("sync-calendar") {
                 defaultPermissions(Permission.MANAGE_SERVER)
                 run {
@@ -78,7 +93,14 @@ class GoogleCommands(
                             }
                         } else {
                             log.debug { "Not authorized!" }
-                            reply("Click [this](${authorizationHandler.getAuthorizationUrl(user, force())}) link to get your authorization code!").setEphemeral(
+                            reply(
+                                "Click [this](${
+                                    authorizationHandler.getAuthorizationUrl(
+                                        user,
+                                        force()
+                                    )
+                                }) link to get your authorization code!"
+                            ).setEphemeral(
                                 true
                             ).await()
                         }
