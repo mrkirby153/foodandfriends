@@ -82,12 +82,12 @@ class GoogleCalendarManager(
             log.warn(e) { "Could not retrieve existing event" }
             return
         }
+        val timezone = timeChangeEvent.event.schedule?.timezone ?: TimeZone.getDefault()
         existingCalendarEvent.start =
-            EventDateTime().setDateTime(DateTime(timeChangeEvent.event.date))
-                .setTimeZone(timeChangeEvent.event.schedule?.timezone?.id ?: "UTC")
+            EventDateTime().setDateTime(DateTime(timeChangeEvent.event.absoluteDate, timezone))
         val endTime = timeChangeEvent.event.date.toInstant().plus(1, ChronoUnit.HOURS)
-        existingCalendarEvent.end = EventDateTime().setDateTime(DateTime(endTime.toEpochMilli()))
-            .setTimeZone(timeChangeEvent.event.schedule?.timezone?.id ?: "UTC")
+        val endDate = Date.from(endTime)
+        existingCalendarEvent.end = EventDateTime().setDateTime(DateTime(endDate, timezone))
         val resp = service.events().update("primary", existing.id, existingCalendarEvent).execute()
         log.debug { "Updated the time for the new event! $resp" }
     }
