@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service
 import java.sql.Timestamp
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.Date
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import com.google.api.services.calendar.model.Event as GoogleCalendarEvent
 
@@ -33,6 +35,8 @@ interface GoogleCalendarService {
     fun syncEvents()
 
     fun syncEvent(event: Event)
+
+    fun getNewInvite(event: Event): GoogleCalendarEvent
 }
 
 @Service
@@ -124,16 +128,25 @@ class GoogleCalendarManager(
 
 
     private fun buildNewInvite(event: Event): GoogleCalendarEvent {
+        log.trace { "Building new invite for ${event.id} (${event.absoluteDate}) at ${event.date} in timezone ${event.schedule?.timezone?.id}" }
+
         return GoogleCalendarEvent().apply {
             location = event.location
             summary = "Food & Friends"
             start =
-                EventDateTime().setDateTime(DateTime(event.date))
-                    .setTimeZone(event.schedule?.timezone?.id ?: "UTC")
-            val endTime = event.date.toInstant().plus(1, ChronoUnit.HOURS)
-            end = EventDateTime().setDateTime(DateTime(endTime.toEpochMilli()))
-                .setTimeZone(event.schedule?.timezone?.id ?: "UTC")
-
+                EventDateTime().setDateTime(
+                    DateTime(
+                        event.absoluteDate,
+                        event.schedule?.timezone ?: TimeZone.getDefault()
+                    )
+                )
+            val endTime = event.absoluteDate.toInstant().plus(1, ChronoUnit.HOURS)
+            end = EventDateTime().setDateTime(
+                DateTime(
+                    Date.from(endTime),
+                    event.schedule?.timezone ?: TimeZone.getDefault()
+                )
+            )
             val invites = event.schedule?.order?.run { orderService.getPeople(this) } ?: emptyList()
             val attendees = invites.filter { it.email != null }
                 .map { EventAttendee().setEmail(it.email) }.toList()
@@ -195,5 +208,9 @@ class GoogleCalendarManager(
             }
             rsvpService.recordRSVP(event, person, response, RSVPSource.GOOGLE_CALENDAR)
         }
+    }
+
+    override fun getNewInvite(event: Event): GoogleCalendarEvent {
+        return buildNewInvite(event)
     }
 }

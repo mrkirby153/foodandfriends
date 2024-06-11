@@ -1,5 +1,6 @@
 package com.mrkirby153.foodandfriends.command
 
+import com.google.api.services.calendar.model.Event
 import com.mrkirby153.botcore.command.slashcommand.dsl.CommandException
 import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.command.slashcommand.dsl.ProvidesSlashCommands
@@ -7,6 +8,7 @@ import com.mrkirby153.botcore.command.slashcommand.dsl.messageContextCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.slashCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.subCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.boolean
+import com.mrkirby153.botcore.command.slashcommand.dsl.types.spring.argument
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
 import com.mrkirby153.botcore.coroutine.await
 import com.mrkirby153.foodandfriends.entity.EventRepository
@@ -14,6 +16,7 @@ import com.mrkirby153.foodandfriends.google.AuthorizationHandler
 import com.mrkirby153.foodandfriends.google.GoogleOAuthException
 import com.mrkirby153.foodandfriends.service.GoogleCalendarService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.mrkirby153.kcutils.spring.coroutine.transaction
 import net.dv8tion.jda.api.Permission
 import org.springframework.stereotype.Component
 
@@ -35,11 +38,13 @@ class GoogleCommands(
                     }
                 }
                 action {
-                    val hook = it.deferReply(true).await()
-                    val event = eventRepository.getByDiscordMessageId(it.target.idLong)
-                        ?: throw CommandException("Event not found. Are you sure this is an event message?")
-                    googleCalendarService.syncEvent(event)
-                    hook.editOriginal("Synced event ${event.id}").await()
+                    transaction {
+                        val hook = it.deferReply(true).await()
+                        val event = eventRepository.getByDiscordMessageId(it.target.idLong)
+                            ?: throw CommandException("Event not found. Are you sure this is an event message?")
+                        googleCalendarService.syncEvent(event)
+                        hook.editOriginal("Synced event ${event.id}").await()
+                    }
                 }
             }
             slashCommand("sync-calendar") {
@@ -48,6 +53,38 @@ class GoogleCommands(
                     defer(true) {
                         googleCalendarService.syncEvents()
                         it.editOriginal("Syncing calendar!").await()
+                    }
+                }
+            }
+            slashCommand("event-debug") {
+                defaultPermissions(Permission.MANAGE_SERVER)
+                val event by eventRepository.argument {
+                    description = "The event to debug"
+                }.required()
+                run {
+                    defer(true) {
+                        val invite = googleCalendarService.getNewInvite(event())
+                        val googleEvent = googleCalendarService.getCalendarEvent(event())
+
+                        fun build(event: Event) = buildString {
+                            append("- Subject: `")
+                            append(event.summary)
+                            appendLine("`")
+                            append("- Attendees: `")
+                            append(event.attendees.joinToString(",") { attendee -> "${attendee.email}/${attendee.responseStatus}" })
+                            appendLine("`")
+                            appendLine("- Start: `${event.start}`")
+                            appendLine("- End: `${event.end}`")
+                        }
+                        it.editOriginal(buildString {
+                            appendLine("**Invite:**")
+                            appendLine(build(invite))
+                            if (googleEvent != null) {
+                                appendLine("**Google Invite**")
+                                appendLine("`${googleEvent.id}`")
+                                appendLine(build(googleEvent))
+                            }
+                        }).await()
                     }
                 }
             }
