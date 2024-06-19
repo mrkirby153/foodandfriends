@@ -13,6 +13,7 @@ import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
 import com.mrkirby153.foodandfriends.service.EventService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.mrkirby153.kcutils.spring.coroutine.transaction
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
@@ -55,6 +56,58 @@ class EventCommands(
                             text(true) {
                                 append("Set the location to")
                                 code(location())
+                            }
+                        }.await()
+                    }
+                }
+            }
+            slashCommand("debug") {
+                disableByDefault()
+                val schedule by scheduleRepository.argument(
+                    enableAutocomplete = true, autocompleteName = scheduleAutocompleteName
+                ) {
+                    description = "The schedule to set the location for"
+                }.required()
+                run {
+                    transaction {
+                        val realSchedule = schedule()
+                        reply(true) {
+                            text(false) {
+                                appendLine("**Schedule Debug Information**")
+                                appendLine("Schedule ID: `${realSchedule.id}`")
+                                appendLine("Post Day: `${realSchedule.postDayOfWeek}` @ `${realSchedule.postTime}`")
+                                appendLine("Timezone: `${realSchedule.timezone.id}`")
+                                appendLine()
+                                appendLine("**Current Event**")
+                                val event = realSchedule.activeEvent
+                                if (event != null) {
+                                    appendLine("Event ID: `${event.id}`")
+                                    appendLine("Google Calendar ID: `${event.calendarEventId ?: "N/A"}`")
+                                    val location =
+                                        if (event.location?.isNotBlank() == true) {
+                                            event.location
+                                        } else {
+                                            "Not Set"
+                                        }
+                                    appendLine("Location: `$location`")
+                                    appendLine(
+                                        "Date: <t:${
+                                            event.date.toInstant().toEpochMilli() / 1000
+                                        }>"
+                                    )
+                                    val rsvps = event.attendees.groupBy { it.person }
+                                    rsvps.forEach { (person, responses) ->
+                                        appendLine(
+                                            "<@${person.discordUserId}>: ${
+                                                responses.joinToString(",") {
+                                                    "${it.rsvpSource}/${it.type}"
+                                                }
+                                            }"
+                                        )
+                                    }
+                                } else {
+                                    appendLine("_No Active Event_")
+                                }
                             }
                         }.await()
                     }
