@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.mrkirby153.kcutils.coroutines.runAsync
 import me.mrkirby153.kcutils.spring.coroutine.transaction
+import me.mrkirby153.kcutils.timing.Debouncer
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.emoji.Emoji
 import net.dv8tion.jda.api.exceptions.ErrorResponseException
@@ -28,6 +29,8 @@ import java.awt.Color
 import java.sql.Timestamp
 import java.time.Instant
 import java.time.ZoneId
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.TimeUnit
 
 interface EventService {
 
@@ -56,10 +59,24 @@ class EventManager(
     private val eventRepository: EventRepository,
     private val scheduleService: ScheduleService,
     private val scheduleRepository: ScheduleRepository,
-    private val applicationEventPublisher: ApplicationEventPublisher
+    private val applicationEventPublisher: ApplicationEventPublisher,
+    threadFactory: ThreadFactory
 ) : EventService {
 
     private val log = KotlinLogging.logger { }
+
+    private val eventUpdateDebouncer = Debouncer<String>({
+        runAsync {
+            transaction {
+                val event = eventRepository.getReferenceById(it!!)
+                log.debug { "Editing event ${event.id}" }
+                val channelId = event.schedule?.channel ?: return@transaction
+                val channel = shardManager.getTextChannelById(channelId) ?: return@transaction
+                val msg = channel.retrieveMessageById(event.discordMessageId).await()
+                msg.editMessage(buildMessage(event).edit()).await()
+            }
+        }
+    }, threadFactory = threadFactory)
 
     override suspend fun postEvent(event: Event): Event {
         val schedule = event.schedule
@@ -139,16 +156,12 @@ class EventManager(
 
     @EventListener
     fun onRsvp(rsvpEvent: RSVPEvent) {
-        runAsync {
-            transaction {
-                val event = eventRepository.getReferenceById(rsvpEvent.event.id)
-                val channelId = event.schedule?.channel ?: return@transaction
-                val channel = shardManager.getTextChannelById(channelId) ?: return@transaction
-                val msg = channel.retrieveMessageById(event.discordMessageId).await()
-                log.trace { "Updating message for event ${rsvpEvent.event}" }
-                msg.editMessage(buildMessage(event).edit()).await()
-            }
-        }
+        eventUpdateDebouncer.debounce(rsvpEvent.event.id, 1, TimeUnit.SECONDS)
+    }
+
+    @EventListener
+    fun onLocationChange(locationChangeEvent: EventLocationChangeEvent) {
+        eventUpdateDebouncer.debounce(locationChangeEvent.event.id, 1, TimeUnit.SECONDS)
     }
 
     private suspend fun buildMessage(event: Event): MessageBuilder {
@@ -160,7 +173,8 @@ class EventManager(
                 appendLine(event.schedule!!.message)
                 if (event.location != null) {
                     appendLine()
-                    appendLine("Location: ${event.location}")
+                    if (event.location?.isBlank() == false)
+                        appendLine("Location: ${event.location}")
                 }
             }
             if (event.attendees.isNotEmpty())
