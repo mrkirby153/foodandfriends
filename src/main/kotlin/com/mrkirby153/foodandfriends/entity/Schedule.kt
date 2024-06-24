@@ -58,6 +58,9 @@ class Schedule(
     @Column(name = "message")
     var message: String = ""
 
+    @Column(name = "log_channel_id")
+    var logChannel: Long? = null
+
     @ManyToOne
     @JoinColumn(name = "active_event")
     var activeEvent: Event? = null

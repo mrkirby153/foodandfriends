@@ -21,6 +21,7 @@ import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.emoji.Emoji
 import net.dv8tion.jda.api.exceptions.ErrorResponseException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
+import net.dv8tion.jda.api.requests.ErrorResponse
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.event.EventListener
@@ -60,7 +61,7 @@ class EventManager(
     private val scheduleService: ScheduleService,
     private val scheduleRepository: ScheduleRepository,
     private val applicationEventPublisher: ApplicationEventPublisher,
-    threadFactory: ThreadFactory
+    threadFactory: ThreadFactory,
 ) : EventService {
 
     private val log = KotlinLogging.logger { }
@@ -74,6 +75,7 @@ class EventManager(
                 val channel = shardManager.getTextChannelById(channelId) ?: return@transaction
                 val msg = channel.retrieveMessageById(event.discordMessageId).await()
                 msg.editMessage(buildMessage(event).edit()).await()
+                createAndUpdateLogMessage(event)
             }
         }
     }, threadFactory = threadFactory)
@@ -151,7 +153,7 @@ class EventManager(
     override suspend fun createAndPostNextEvent(schedule: Schedule): Event {
         val nextEvent = createNextEvent(schedule)
         postEvent(nextEvent)
-        return nextEvent
+        return createAndUpdateLogMessage(nextEvent)
     }
 
     @EventListener
@@ -213,5 +215,41 @@ class EventManager(
     private fun getProviderAbbreviation(source: RSVPSource) = when (source) {
         RSVPSource.GOOGLE_CALENDAR -> "G"
         RSVPSource.REACTION -> "D"
+    }
+
+    private suspend fun createAndUpdateLogMessage(event: Event): Event {
+        return transaction {
+            val logChannelId = event.schedule?.logChannel ?: return@transaction event
+            val logChannel =
+                shardManager.getTextChannelById(logChannelId) ?: return@transaction event
+
+            val message = if (event.logMessageId != null) {
+                try {
+                    logChannel.retrieveMessageById(event.logMessageId!!).await()
+                } catch (e: ErrorResponseException) {
+                    if (e.errorResponse == ErrorResponse.UNKNOWN_MESSAGE) {
+                        null
+                    } else {
+                        throw e
+                    }
+                }
+            } else {
+                null
+            }
+
+            val location =
+                if (event.location?.isBlank() == true) "No Location Set" else event.location
+            val messageText = "<t:${
+                event.absoluteDate.toInstant().toEpochMilli() / 1000
+            }>: $location"
+            if (message != null) {
+                message.editMessage(messageText).await()
+                return@transaction event
+            } else {
+                val newMessage = logChannel.sendMessage(messageText).await()
+                event.logMessageId = newMessage.idLong
+                return@transaction eventRepository.save(event)
+            }
+        }
     }
 }

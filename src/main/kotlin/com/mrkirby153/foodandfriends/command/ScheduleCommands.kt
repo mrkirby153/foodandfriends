@@ -168,6 +168,23 @@ class ScheduleCommands(
                         }
                     }
                 }
+                subCommand("log-channel") {
+                    val schedule by scheduleRepository.argument(
+                        enableAutocomplete = true,
+                        autocompleteName = scheduleAutocompleteName
+                    ).required()
+                    val channel by textChannel { }.optional()
+                    run {
+                        val realSchedule = schedule()
+                        realSchedule.logChannel = channel()?.idLong
+                        scheduleRepository.save(realSchedule)
+                        if (channel() == null) {
+                            reply("Cleared the log channel for `${realSchedule.id}`").await()
+                        } else {
+                            reply("Set the log channel for `${realSchedule.id}` to ${channel()!!.asMention}").await()
+                        }
+                    }
+                }
             }
         }
     }

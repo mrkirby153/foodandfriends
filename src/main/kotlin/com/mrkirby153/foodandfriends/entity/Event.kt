@@ -38,6 +38,9 @@ class Event(
     @OneToMany(mappedBy = "event")
     var attendees: MutableList<RSVP> = mutableListOf()
 
+    @Column(name = "log_message_id")
+    var logMessageId: Long? = null
+
 
     fun getTime(): Instant {
         val calendar = Calendar.getInstance(schedule?.timezone ?: TimeZone.getTimeZone("UTC"))
