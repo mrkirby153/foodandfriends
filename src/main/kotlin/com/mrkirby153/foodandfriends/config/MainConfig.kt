@@ -3,6 +3,8 @@ package com.mrkirby153.foodandfriends.config
 import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.spring.config.EnableBot
 import com.mrkirby153.botcore.spring.config.EnableJpaAutocomplete
+import com.mrkirby153.botcore.spring.config.EnableModalManager
+import com.mrkirby153.botcore.spring.config.ModalManagerConfiguration
 import com.mrkirby153.botcore.spring.config.RegisterSlashCommands
 import me.mrkirby153.kcutils.spring.coroutine.CoroutineTransactionHandler
 import net.dv8tion.jda.api.sharding.ShardManager
@@ -24,6 +26,7 @@ import java.util.concurrent.Executor
 @EnableAsync(proxyTargetClass = true)
 @EnableJpaAuditing
 @EnableBot
+@EnableModalManager
 @RegisterSlashCommands
 @EnableJpaAutocomplete
 class MainConfig(

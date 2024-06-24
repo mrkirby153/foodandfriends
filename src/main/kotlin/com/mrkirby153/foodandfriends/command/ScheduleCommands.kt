@@ -3,6 +3,7 @@ package com.mrkirby153.foodandfriends.command
 import com.mrkirby153.botcore.command.slashcommand.dsl.CommandException
 import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.command.slashcommand.dsl.ProvidesSlashCommands
+import com.mrkirby153.botcore.command.slashcommand.dsl.messageContextCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.slashCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.subCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.enum
@@ -10,14 +11,19 @@ import com.mrkirby153.botcore.command.slashcommand.dsl.types.spring.argument
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.textChannel
 import com.mrkirby153.botcore.coroutine.await
+import com.mrkirby153.botcore.modal.ModalManager
+import com.mrkirby153.botcore.modal.await
 import com.mrkirby153.foodandfriends.entity.DayOfWeek
+import com.mrkirby153.foodandfriends.entity.EventRepository
 import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
+import com.mrkirby153.foodandfriends.service.EventManager
 import com.mrkirby153.foodandfriends.service.EventService
 import com.mrkirby153.foodandfriends.service.ScheduleService
 import me.mrkirby153.kcutils.spring.coroutine.transaction
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
+import net.dv8tion.jda.api.interactions.components.text.TextInputStyle
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
 import java.text.SimpleDateFormat
@@ -28,7 +34,9 @@ class ScheduleCommands(
     private val scheduleRepository: ScheduleRepository,
     private val scheduleService: ScheduleService,
     private val shardManager: ShardManager,
-    private val eventService: EventService
+    private val eventService: EventService,
+    private val modalManager: ModalManager,
+    private val eventRepository: EventRepository,
 ) : ProvidesSlashCommands {
 
     private val scheduleAutocompleteName: (Schedule) -> String = {
@@ -184,6 +192,38 @@ class ScheduleCommands(
                             reply("Set the log channel for `${realSchedule.id}` to ${channel()!!.asMention}").await()
                         }
                     }
+                }
+            }
+            messageContextCommand("Set Location") {
+                check {
+                    if (this.instance.member?.hasPermission(Permission.MANAGE_SERVER) != true)
+                        fail("You do not have permission to perform this command")
+                }
+                action {
+                    transaction {
+                        val event = eventRepository.getByDiscordMessageId(it.target.idLong)
+                            ?: throw CommandException("Event not found")
+                        val modal = modalManager.build {
+                            title = "Set Event Location"
+                            textInput("location") {
+                                name = "Location"
+                                style = TextInputStyle.PARAGRAPH
+                                value =
+                                    if (event.location?.isBlank() == true) null else event.location
+                                max = 2048
+                            }
+                        }
+                        it.replyModal(modal).await()
+                        val modalResult = modalManager.await(modal)
+                        val location = modalResult.data["location"]
+                        if (location?.isEmpty() == true) {
+                            modalResult.reply("No location specified!").setEphemeral(true).await()
+                        } else {
+                            eventService.setLocation(event, location ?: "")
+                            modalResult.reply("Updated the location").setEphemeral(true).await()
+                        }
+                    }
+
                 }
             }
         }
