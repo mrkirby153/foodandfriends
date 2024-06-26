@@ -13,11 +13,11 @@ import com.mrkirby153.foodandfriends.extensions.toLocalTimestamp
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import me.mrkirby153.kcutils.coroutines.runAsync
 import me.mrkirby153.kcutils.spring.coroutine.transaction
 import me.mrkirby153.kcutils.timing.Debouncer
-import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.emoji.Emoji
 import net.dv8tion.jda.api.exceptions.ErrorResponseException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
@@ -39,8 +39,6 @@ interface EventService {
     suspend fun postEvent(event: Event): Event
 
     fun createNextEvent(schedule: Schedule): Event
-
-    fun getByMessage(message: Message) = getByMessage(message.idLong)
 
     fun getByMessage(messageId: Long): Event?
 
@@ -70,12 +68,7 @@ class EventManager(
         runAsync {
             transaction {
                 val event = eventRepository.getReferenceById(it!!)
-                log.debug { "Editing event ${event.id}" }
-                val channelId = event.schedule?.channel ?: return@transaction
-                val channel = shardManager.getTextChannelById(channelId) ?: return@transaction
-                val msg = channel.retrieveMessageById(event.discordMessageId).await()
-                msg.editMessage(buildMessage(event).edit()).await()
-                createAndUpdateLogMessage(event)
+                update(event)
             }
         }
     }, threadFactory = threadFactory)
@@ -136,7 +129,10 @@ class EventManager(
 
     override fun setLocation(event: Event, location: String) {
         event.location = location
-        val new = eventRepository.save(event)
+        var new = eventRepository.save(event)
+        new = runBlocking {
+            update(new)
+        }
         applicationEventPublisher.publishEvent(EventLocationChangeEvent(new, location))
     }
 
@@ -145,7 +141,10 @@ class EventManager(
             event.schedule?.timezone?.toZoneId() ?: ZoneId.systemDefault()
         )
         event.absoluteDate = Timestamp.from(timestamp)
-        val new = eventRepository.save(event)
+        var new = eventRepository.save(event)
+        new = runBlocking {
+            update(new)
+        }
         applicationEventPublisher.publishEvent(EventTimeChangeEvent(new, timestamp))
     }
 
@@ -251,5 +250,14 @@ class EventManager(
                 return@transaction eventRepository.save(event)
             }
         }
+    }
+
+    private suspend fun update(event: Event): Event {
+        log.debug { "Editing event ${event.id}" }
+        val channelId = event.schedule?.channel ?: return event
+        val channel = shardManager.getTextChannelById(channelId) ?: return event
+        val msg = channel.retrieveMessageById(event.discordMessageId).await()
+        msg.editMessage(buildMessage(event).edit()).await()
+        return createAndUpdateLogMessage(event)
     }
 }
