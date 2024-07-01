@@ -194,38 +194,7 @@ class ScheduleCommands(
                     }
                 }
             }
-            messageContextCommand("Set Location") {
-                check {
-                    if (this.instance.member?.hasPermission(Permission.MANAGE_SERVER) != true)
-                        fail("You do not have permission to perform this command")
-                }
-                action {
-                    transaction {
-                        val event = eventRepository.getByDiscordMessageId(it.target.idLong)
-                            ?: throw CommandException("Event not found")
-                        val modal = modalManager.build {
-                            title = "Set Event Location"
-                            textInput("location") {
-                                name = "Location"
-                                style = TextInputStyle.PARAGRAPH
-                                value =
-                                    if (event.location?.isBlank() == true) null else event.location
-                                max = 2048
-                            }
-                        }
-                        it.replyModal(modal).await()
-                        val modalResult = modalManager.await(modal)
-                        val location = modalResult.data["location"]
-                        if (location?.isEmpty() == true) {
-                            modalResult.reply("No location specified!").setEphemeral(true).await()
-                        } else {
-                            eventService.setLocation(event, location ?: "")
-                            modalResult.reply("Updated the location").setEphemeral(true).await()
-                        }
-                    }
 
-                }
-            }
         }
     }
 }

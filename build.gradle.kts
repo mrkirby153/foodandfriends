@@ -8,6 +8,7 @@ plugins {
     id("org.flywaydb.flyway") version "10.6.0"
     kotlin("jvm") version "1.9.22"
     kotlin("plugin.spring") version "1.9.22"
+    kotlin("plugin.serialization") version "1.9.22"
 }
 
 group = "com.mrkirby153"
@@ -43,6 +44,10 @@ dependencies {
     implementation("com.mrkirby153:interaction-menus:2.0-SNAPSHOT")
     implementation("net.dv8tion:JDA:5.0.0-beta.24")
     implementation("io.github.oshai:kotlin-logging-jvm:6.0.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("io.ktor:ktor-client-core:2.3.12")
+    implementation("io.ktor:ktor-client-cio:2.3.12")
+    implementation("io.ktor:ktor-client-resources:2.3.12")
 
     implementation("com.google.api-client:google-api-client:1.35.2")
     implementation("com.google.oauth-client:google-oauth-client:1.36.0")

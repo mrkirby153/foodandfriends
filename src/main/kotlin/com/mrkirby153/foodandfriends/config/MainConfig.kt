@@ -1,11 +1,12 @@
 package com.mrkirby153.foodandfriends.config
 
+import com.mrkirby153.botcore.ConfirmationHandler
 import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.spring.config.EnableBot
 import com.mrkirby153.botcore.spring.config.EnableJpaAutocomplete
 import com.mrkirby153.botcore.spring.config.EnableModalManager
-import com.mrkirby153.botcore.spring.config.ModalManagerConfiguration
 import com.mrkirby153.botcore.spring.config.RegisterSlashCommands
+import kotlinx.serialization.json.Json
 import me.mrkirby153.kcutils.spring.coroutine.CoroutineTransactionHandler
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.context.annotation.Bean
@@ -39,6 +40,7 @@ class MainConfig(
 
     init {
         shardManager.addEventListener(dslCommandExecutor.getListener())
+        shardManager.addEventListener(ConfirmationHandler)
         CoroutineTransactionHandler.setDefault(transactionTemplate)
     }
 
@@ -63,4 +65,7 @@ class MainConfig(
             setThreadNamePrefix("TaskScheduler")
         }
     }
+
+    @Bean
+    fun json() = Json { ignoreUnknownKeys = true }
 }
