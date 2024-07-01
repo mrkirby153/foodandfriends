@@ -1,6 +1,7 @@
 package com.mrkirby153.foodandfriends.service
 
 import com.mrkirby153.foodandfriends.config.GoogleMapsConfig
+import com.mrkirby153.foodandfriends.google.maps.AddressComponent
 import com.mrkirby153.foodandfriends.google.maps.GoogleMapsApi
 import com.mrkirby153.foodandfriends.google.maps.GoogleMapsApiRequests
 import com.mrkirby153.foodandfriends.google.maps.TextSearchResponse
@@ -14,8 +15,11 @@ interface GoogleMapsService {
     fun isGoogleMapsEnabled(): Boolean
 
     suspend fun search(query: String): TextSearchResponse
+
+    suspend fun getAddress(placeId: String): String
 }
 
+private const val COMMA = "$\$COMMA$$"
 
 @Service
 class GoogleMapsManager(
@@ -23,6 +27,17 @@ class GoogleMapsManager(
     @Qualifier("mapsHttpClient") private val client: HttpClient,
     @Value("\${google.maps.origin:}") googleMapsOrigin: String?
 ) : GoogleMapsService {
+
+    private final val addressComponents = arrayOf(
+        "street_number",
+        "route",
+        "subpremise",
+        COMMA,
+        "locality",
+        COMMA,
+        "administrative_area_level_1",
+        "postal_code"
+    )
 
     private val log = KotlinLogging.logger {}
 
@@ -47,5 +62,29 @@ class GoogleMapsManager(
                 location = googleMapsLocation
             )
         )
+    }
+
+    override suspend fun getAddress(placeId: String): String {
+        val place = GoogleMapsApiRequests.Places.details(
+            client,
+            GoogleMapsApi.Place.Details(placeId = placeId, fields = listOf("address_components"))
+        )
+        val components = mutableMapOf<String, MutableList<AddressComponent>>()
+        place.result.addressComponents!!.forEach {
+            it.types.forEach { type ->
+                val sub = components.computeIfAbsent(type) { mutableListOf() }
+                sub.add(it)
+            }
+        }
+
+        return buildString {
+            addressComponents.forEach {
+                if (it == COMMA) {
+                    append(",")
+                } else {
+                    append(components[it]?.joinToString(" ") { a -> " ${a.shortName}" } ?: "")
+                }
+            }
+        }.trim(' ')
     }
 }

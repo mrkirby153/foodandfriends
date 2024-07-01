@@ -262,14 +262,11 @@ class EventCommands(
         if (places.size == 1) {
             // Single result, ask the user to confirm
             val first = places.first()
-            val address = first.formattedAddress ?: "No address found"
+            val address = googleMapsService.getAddress(first.placeId!!)
             val (newHook, confirmed) = hook.confirm(user, true) {
                 text {
                     appendLine("Google Maps has resolved the following location:")
                     code(address)
-                    if (first.url != null) {
-                        appendLine("URL: ${first.url}")
-                    }
                     appendLine("Use this location?")
                 }
             }
@@ -309,7 +306,8 @@ class EventCommands(
                 it.componentId == selectId
             }
             val selected = evt.selectedOptions.first()
-            return Pair(hook, p[selected.value]?.formattedAddress ?: locationQuery)
+            val place = p[selected.value]?.placeId?.run { googleMapsService.getAddress(this) }
+            return Pair(hook, place ?: locationQuery)
         }
     }
 }

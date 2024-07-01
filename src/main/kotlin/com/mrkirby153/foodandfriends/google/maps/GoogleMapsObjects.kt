@@ -49,6 +49,7 @@ data class TextSearchResponse(
     val nextPageToken: String? = null
 )
 
+@Serializable
 data class PlacesDetailsResponse(
     @SerialName("html_attributions")
     val htmlAttributions: List<String>,
@@ -115,7 +116,7 @@ data class Place(
     @SerialName("serves_wine")
     val servesWine: Boolean? = null,
     val takeout: Boolean? = null,
-    val types: List<String>,
+    val types: List<String>? = null,
     val url: String? = null,
     @SerialName("user_ratings_total")
     val userRatingsTotal: Int? = null,
