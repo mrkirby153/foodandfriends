@@ -15,6 +15,7 @@ import com.mrkirby153.foodandfriends.google.AuthorizationHandler
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import okio.IOException
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -41,6 +42,8 @@ interface GoogleCalendarService {
 
 @Service
 class GoogleCalendarManager(
+    @Value("\${google.calendar.enabled:true}")
+    private val googleCalendarEnabled: Boolean,
     private val authorizationHandler: AuthorizationHandler,
     private val transport: NetHttpTransport,
     private val gsonFactory: GsonFactory,
@@ -52,8 +55,21 @@ class GoogleCalendarManager(
 
     private val log = KotlinLogging.logger { }
 
+    init {
+        if (!googleCalendarEnabled) {
+            log.info { "Google calendar service is disabled" }
+        } else {
+            log.info { "Google calendar service is enabled" }
+        }
+    }
+
+
     @EventListener
     fun onLocationChange(locationChangeEvent: EventLocationChangeEvent) {
+        if (!googleCalendarEnabled) {
+            log.debug { "Ignoring LocationChange, calendar is not enabled" }
+            return
+        }
         val existing = getCalendarEvent(locationChangeEvent.event)
         if (existing != null) {
             log.debug { "Updating existing event" }
@@ -68,6 +84,10 @@ class GoogleCalendarManager(
 
     @EventListener
     fun onTimeChange(timeChangeEvent: EventTimeChangeEvent) {
+        if (!googleCalendarEnabled) {
+            log.debug { "Ignoring TimeChangeEvent, calendar is not enabled" }
+            return
+        }
         log.debug { "Processing time change event, new time ${timeChangeEvent.newTime}" }
         val existing = getCalendarEvent(timeChangeEvent.event) ?: return
         val service = try {
@@ -159,9 +179,17 @@ class GoogleCalendarManager(
     @Scheduled(fixedRate = 30, timeUnit = TimeUnit.MINUTES, initialDelay = 0)
     @Transactional
     override fun syncEvents() {
+        if (!googleCalendarEnabled) {
+            log.debug { "Ignoring calendar sync, calendar is not enabled" }
+            return
+        }
         log.debug { "Syncing calendar events" }
         val toSync =
-            eventRepository.getAllByAbsoluteDateAfterAndCalendarEventIdIsNotNull(Timestamp.from(Instant.now()))
+            eventRepository.getAllByAbsoluteDateAfterAndCalendarEventIdIsNotNull(
+                Timestamp.from(
+                    Instant.now()
+                )
+            )
         if (toSync.isEmpty()) {
             log.debug { "No events to sync!" }
         } else {
