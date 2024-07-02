@@ -244,15 +244,19 @@ class EventCommands(
             return Pair(hook, locationQuery)
         }
 
-        log.trace { "Searching google for \"$locationQuery\"" }
-        val searchResults = googleMapsService.search(locationQuery)
-        val success = searchResults.status == PlaceSearchStatus.OK
-        log.trace { "Google returned ${searchResults.results.size}. Success? $success" }
-        if (!success) {
-            log.trace { "Returning literal, google result was ${searchResults.status}" }
-            return Pair(hook, locationQuery)
+        val places = if (googleMapsService.isShareUrl(locationQuery)) {
+            googleMapsService.resolveShareURL(locationQuery)
+        } else {
+            log.trace { "Searching google for \"$locationQuery\"" }
+            val searchResults = googleMapsService.search(locationQuery)
+            val success = searchResults.status == PlaceSearchStatus.OK
+            log.trace { "Google returned ${searchResults.results.size}. Success? $success" }
+            if (!success) {
+                log.trace { "Returning literal, google result was ${searchResults.status}" }
+                return Pair(hook, locationQuery)
+            }
+            searchResults.results
         }
-        val places = searchResults.results
 
         if (places.isEmpty()) {
             log.trace { "Returning literal, google did not return any places" }
