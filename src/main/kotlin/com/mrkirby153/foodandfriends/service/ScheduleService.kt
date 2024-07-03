@@ -4,7 +4,9 @@ import com.mrkirby153.botcore.spring.event.BotReadyEvent
 import com.mrkirby153.foodandfriends.entity.DayOfWeek
 import com.mrkirby153.foodandfriends.entity.Order
 import com.mrkirby153.foodandfriends.entity.Schedule
+import com.mrkirby153.foodandfriends.entity.ScheduleCadence
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
+import com.mrkirby153.foodandfriends.extensions.toLocalTimestamp
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import kotlinx.coroutines.runBlocking
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 import java.util.Calendar
 import java.util.Date
 import java.util.TimeZone
@@ -27,12 +30,13 @@ interface ScheduleService {
 
     fun getNextPostTime(): Pair<Instant, Schedule>?
 
+    fun getPostTime(schedule: Schedule, eventTime: Instant): Instant
+
     suspend fun postScheduleMessage(schedule: Schedule)
 
     fun createNew(
         owner: User,
         channel: TextChannel,
-        postDay: DayOfWeek,
         postTime: String,
         eventDay: DayOfWeek,
         eventTime: String,
@@ -46,13 +50,17 @@ interface ScheduleService {
 
     fun delete(id: String)
 
-    fun getNextOccurrence(schedule: Schedule): Instant
+    fun getNextOccurrence(schedule: Schedule, startTime: Instant = Instant.now()): Instant
 
     fun link(schedule: Schedule, order: Order): Schedule
 
     fun unlink(schedule: Schedule): Schedule
 
     fun setTimezone(schedule: Schedule, timezone: TimeZone): Schedule
+
+    fun setCadence(schedule: Schedule, cadence: ScheduleCadence): Schedule
+
+    fun setPostOffset(schedule: Schedule, offset: Int): Schedule
 }
 
 @Service
@@ -80,62 +88,31 @@ class ScheduleManager(
 
 
     override fun getNextPostTime(): Pair<Instant, Schedule>? {
-        val timezonesToConsider = scheduleRepository.getTimezones()
-        log.debug { "There are ${timezonesToConsider.size} timezones to consider" }
-        var earliest: Pair<Instant, Schedule>? = null
-        timezonesToConsider.forEach { timezone ->
-            log.trace { "Processing timezone ${timezone.id}" }
-            val now = Calendar.getInstance(timezone)
-            val currentDayOfWeek =
-                calendarDayMap[now.get(Calendar.DAY_OF_WEEK)] ?: error("No current day of week")
-            log.debug { "It is currently $currentDayOfWeek in ${timezone.id}" }
-            val calendar = Calendar.getInstance(timezone)
-            do {
-                val day = calendarDayMap[calendar.get(Calendar.DAY_OF_WEEK)]
-                log.trace { "Checking for events on $day in $timezone" }
-                if (day != null) {
-                    val toPost = scheduleRepository.getByPostDayOfWeekAndTimezone(day, timezone)
-                    log.debug { "Found ${toPost.size} events" }
-                    if (toPost.isNotEmpty()) {
-                        val isToday =
-                            calendar.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
-                        val first = toPost.associateBy {
-                            val eventCalendar = calendar.clone() as Calendar
-                            val hour = it.postTime.split(":")[0].toInt()
-                            val minute = it.postTime.split(":")[1].toInt()
-                            eventCalendar.set(Calendar.HOUR_OF_DAY, hour)
-                            eventCalendar.set(Calendar.MINUTE, minute)
-                            eventCalendar.set(Calendar.SECOND, 0)
-                            eventCalendar.set(Calendar.MILLISECOND, 0)
+        log.debug { "Looking up next post time" }
 
-                            if (eventCalendar.toInstant().isBefore(now.toInstant()) && isToday) {
-                                log.debug { "Event is today and before now, adding 7 days..." }
-                                eventCalendar.add(Calendar.DAY_OF_YEAR, 7)
-                            }
-
-                            eventCalendar
-                        }.entries.filter {
-                            log.debug {
-                                "${it.value.id} has active event? ${it.value.activeEvent != null} and ${
-                                    it.key.toInstant().isAfter(Instant.now())
-                                }"
-                            }
-                            it.key.toInstant().isAfter(Instant.now()) && it.value.activeEvent?.getTime()?.isBefore(it.key.toInstant()) == true
-                        }.minByOrNull { (k, _) -> k }
-                        log.debug { "Next event is ${first?.value?.message}" }
-                        if (first != null) {
-                            if (earliest == null || earliest!!.first.isAfter(first.key.toInstant())) {
-                                log.debug { "new earliest event!" }
-                                earliest = Pair(first.key.toInstant(), first.value)
-                            }
-                        }
-                    }
-                }
-                calendar.add(Calendar.DAY_OF_WEEK, 1)
-            } while (calendar.get(Calendar.DAY_OF_WEEK) != now.get(Calendar.DAY_OF_WEEK))
+        val timesBySchedule = scheduleRepository.findAll().associateBy { schedule ->
+            val nextEvent = if (schedule.activeEvent != null) {
+                getNextOccurrence(schedule, schedule.activeEvent!!.getTime())
+            } else {
+                getNextOccurrence(schedule)
+            }
+            getPostTime(schedule, nextEvent)
         }
-        log.debug { "Earliest schedule is: ${earliest?.second?.id}" }
-        return earliest
+
+        val next = timesBySchedule.minByOrNull { it.key }
+        log.debug { "Next post is ${next?.value?.id} @ ${next?.key}" }
+        return next?.run {
+            Pair(this.key, this.value)
+        }
+    }
+
+    override fun getPostTime(schedule: Schedule, eventTime: Instant): Instant {
+        val hour = schedule.postTime.split(":")[0].toInt()
+        val minute = schedule.postTime.split(":")[1].toInt()
+        val postTime =
+            eventTime.atZone(schedule.timezone.toZoneId()).withHour(hour).withMinute(minute)
+                .withSecond(0).minusDays(schedule.postOffset.toLong())
+        return postTime.toInstant()
     }
 
     override suspend fun postScheduleMessage(schedule: Schedule) {
@@ -146,7 +123,6 @@ class ScheduleManager(
     override fun createNew(
         owner: User,
         channel: TextChannel,
-        postDay: DayOfWeek,
         postTime: String,
         eventDay: DayOfWeek,
         eventTime: String,
@@ -155,7 +131,6 @@ class ScheduleManager(
     ): Schedule {
         val schedule =
             Schedule(
-                postDayOfWeek = postDay,
                 postTime = postTime,
                 channel = channel.idLong,
                 calendarUser = owner.idLong
@@ -163,6 +138,7 @@ class ScheduleManager(
         schedule.eventDayOfWeek = eventDay
         schedule.eventTime = eventTime
         schedule.message = message
+        schedule.postOffset = 6 // Post a week before
         val new = scheduleRepository.save(schedule)
         scheduleNextPost()
         return new
@@ -173,18 +149,34 @@ class ScheduleManager(
         scheduleRepository.deleteById(id)
     }
 
-    override fun getNextOccurrence(schedule: Schedule): Instant {
-        val calendar = Calendar.getInstance(schedule.timezone)
-        while (calendarDayMap[calendar.get(Calendar.DAY_OF_WEEK)] != schedule.eventDayOfWeek) {
-            calendar.add(Calendar.DAY_OF_WEEK, 1)
-        }
+    override fun getNextOccurrence(schedule: Schedule, startTime: Instant): Instant {
         val hour = schedule.eventTime.split(":")[0].toInt()
         val minute = schedule.eventTime.split(":")[1].toInt()
-        calendar.set(Calendar.HOUR_OF_DAY, hour)
-        calendar.set(Calendar.MINUTE, minute)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        return calendar.time.toInstant()
+        when (schedule.cadence) {
+            ScheduleCadence.WEEKLY -> {
+                val now = startTime.toLocalTimestamp(schedule.timezone.toZoneId()).toLocalDateTime()
+                val eventTime =
+                    now.with(TemporalAdjusters.next(schedule.eventDayOfWeek.javaDayOfWeek))
+                        .withHour(hour).withMinute(minute).withSecond(0)
+                val final = eventTime.atZone(schedule.timezone.toZoneId()).toInstant()
+                return final
+            }
+
+            ScheduleCadence.FIRST_OF_MONTH -> {
+                val now = startTime.toLocalTimestamp(schedule.timezone.toZoneId()).toLocalDateTime()
+                log.trace { "It is $now" }
+                val adjuster = TemporalAdjusters.firstInMonth(schedule.eventDayOfWeek.javaDayOfWeek)
+                var eventTime =
+                    now.with(adjuster).withHour(hour).withMinute(minute).withSecond(0)
+                while (eventTime.isBefore(now)) {
+                    log.trace { "The event ($eventTime) is before $now, moving forward 1 month" }
+                    eventTime = eventTime.plusMonths(1).with(adjuster)
+                }
+                val final = eventTime.atZone(schedule.timezone.toZoneId()).toInstant()
+                log.trace { "The event is at $final" }
+                return final
+            }
+        }
     }
 
     override fun link(schedule: Schedule, order: Order): Schedule {
@@ -203,6 +195,20 @@ class ScheduleManager(
         val newSchedule = scheduleRepository.save(schedule)
         scheduleNextPost()
         return newSchedule
+    }
+
+    override fun setCadence(schedule: Schedule, cadence: ScheduleCadence): Schedule {
+        schedule.cadence = cadence
+        val result = scheduleRepository.save(schedule)
+        scheduleNextPost()
+        return result
+    }
+
+    override fun setPostOffset(schedule: Schedule, offset: Int): Schedule {
+        schedule.postOffset = offset
+        val result = scheduleRepository.save(schedule)
+        scheduleNextPost()
+        return result
     }
 
     @EventListener
@@ -257,5 +263,4 @@ class ScheduleManager(
         }
         scheduleNextPost()
     }
-
 }

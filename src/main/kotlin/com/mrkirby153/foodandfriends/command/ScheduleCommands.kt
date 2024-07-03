@@ -1,32 +1,29 @@
 package com.mrkirby153.foodandfriends.command
 
-import com.mrkirby153.botcore.command.slashcommand.dsl.CommandException
+import com.mrkirby153.botcore.builder.message
 import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.command.slashcommand.dsl.ProvidesSlashCommands
-import com.mrkirby153.botcore.command.slashcommand.dsl.messageContextCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.slashCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.subCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.enum
+import com.mrkirby153.botcore.command.slashcommand.dsl.types.int
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.spring.argument
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.textChannel
 import com.mrkirby153.botcore.coroutine.await
-import com.mrkirby153.botcore.modal.ModalManager
-import com.mrkirby153.botcore.modal.await
 import com.mrkirby153.foodandfriends.entity.DayOfWeek
-import com.mrkirby153.foodandfriends.entity.EventRepository
 import com.mrkirby153.foodandfriends.entity.Schedule
+import com.mrkirby153.foodandfriends.entity.ScheduleCadence
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
-import com.mrkirby153.foodandfriends.service.EventManager
 import com.mrkirby153.foodandfriends.service.EventService
 import com.mrkirby153.foodandfriends.service.ScheduleService
 import me.mrkirby153.kcutils.spring.coroutine.transaction
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
-import net.dv8tion.jda.api.interactions.components.text.TextInputStyle
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.TimeZone
 
 @Component
@@ -35,8 +32,6 @@ class ScheduleCommands(
     private val scheduleService: ScheduleService,
     private val shardManager: ShardManager,
     private val eventService: EventService,
-    private val modalManager: ModalManager,
-    private val eventRepository: EventRepository,
 ) : ProvidesSlashCommands {
 
     private val scheduleAutocompleteName: (Schedule) -> String = {
@@ -76,7 +71,6 @@ class ScheduleCommands(
                         val schedule = scheduleService.createNew(
                             user,
                             realChannel,
-                            postDayOfWeek(),
                             postTime(),
                             eventDayOfWeek(),
                             eventTime(),
@@ -126,21 +120,50 @@ class ScheduleCommands(
                     val schedule by scheduleRepository.argument(
                         enableAutocomplete = true,
                         autocompleteName = scheduleAutocompleteName
-                    ).optional()
+                    ).required()
+                    val amount by int { }.optional(1)
                     run {
                         defer(true) {
                             val realSchedule = schedule()
-                            if (realSchedule != null) {
-                                val nextEvent = scheduleService.getNextOccurrence(realSchedule)
-                                it.editOriginal("Next occurrence is <t:${nextEvent.toEpochMilli() / 1000}>")
-                                    .await()
+
+                            val occurrences = mutableListOf<Instant>()
+
+                            var start = Instant.now()
+                            for (i in 0 until amount()) {
+                                val next = scheduleService.getNextOccurrence(realSchedule, start)
+                                occurrences.add(next)
+                                start = next.plus(1, ChronoUnit.DAYS)
+                            }
+                            it.editOriginal(message {
+                                text {
+                                    appendLine("Next ${amount()} occurrences:")
+                                    occurrences.forEach { occ ->
+                                        appendLine(
+                                            "- <t:${occ.toEpochMilli() / 1000}> (Posts at <t:${
+                                                scheduleService.getPostTime(
+                                                    schedule(),
+                                                    occ
+                                                ).toEpochMilli() / 1000
+                                            }>)"
+                                        )
+                                    }
+                                }
+                            }.edit()).await()
+                        }
+                    }
+                }
+                subCommand("next_post") {
+                    run {
+                        defer(true) {
+                            val next = scheduleService.getNextPostTime()
+                            if (next != null) {
+                                it.editOriginal(message {
+                                    text(false) {
+                                        appendLine("Next Post: `${next.second.id}` @ <t:${next.first.toEpochMilli() / 1000}>")
+                                    }
+                                }.edit()).await()
                             } else {
-                                val next = scheduleService.getNextPostTime()
-                                    ?: throw CommandException("nothing next!")
-                                val sdf = SimpleDateFormat("MM-dd-yy HH:mm:ss")
-                                val nextTime = scheduleService.getNextOccurrence(next.second)
-                                it.editOriginal("Next post time is ${sdf.format(next.first.toEpochMilli())} (<t:${next.first.toEpochMilli() / 1000}>) for ${next.second.id} (<t:${nextTime.toEpochMilli() / 1000}>)")
-                                    .await()
+                                it.editOriginal("No next post time!").await()
                             }
                         }
                     }
@@ -155,6 +178,34 @@ class ScheduleCommands(
                     run {
                         val event = eventService.createAndPostNextEvent(schedule())
                         reply("Posted ${event.id}").await()
+                    }
+                }
+
+                subCommand("cadence") {
+                    val schedule by scheduleRepository.argument(
+                        enableAutocomplete = true,
+                        autocompleteName = scheduleAutocompleteName
+                    ) {
+                        description = "The schedule to adjust the cadence for"
+                    }.required()
+                    val cadence by enum<ScheduleCadence> { }.required()
+                    run {
+                        scheduleService.setCadence(schedule(), cadence())
+                        reply("Updated cadence for `${schedule().id}`").await()
+                    }
+                }
+
+                subCommand("post_offset") {
+                    val schedule by scheduleRepository.argument(
+                        enableAutocomplete = true,
+                        autocompleteName = scheduleAutocompleteName
+                    ) {
+                        description = "The schedule to adjust the cadence for"
+                    }.required()
+                    val offset by int { }.required()
+                    run {
+                        scheduleService.setPostOffset(schedule(), offset())
+                        reply("Updated the post offset for `${schedule().id}").await()
                     }
                 }
 

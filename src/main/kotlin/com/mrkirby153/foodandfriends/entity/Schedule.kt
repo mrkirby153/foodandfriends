@@ -15,14 +15,19 @@ import java.time.Instant
 import java.util.TimeZone
 
 
-enum class DayOfWeek {
-    MONDAY,
-    TUESDAY,
-    WEDNESDAY,
-    THURSDAY,
-    FRIDAY,
-    SATURDAY,
-    SUNDAY
+enum class DayOfWeek(val javaDayOfWeek: java.time.DayOfWeek) {
+    MONDAY(java.time.DayOfWeek.MONDAY),
+    TUESDAY(java.time.DayOfWeek.TUESDAY),
+    WEDNESDAY(java.time.DayOfWeek.WEDNESDAY),
+    THURSDAY(java.time.DayOfWeek.THURSDAY),
+    FRIDAY(java.time.DayOfWeek.FRIDAY),
+    SATURDAY(java.time.DayOfWeek.SATURDAY),
+    SUNDAY(java.time.DayOfWeek.SUNDAY);
+}
+
+enum class ScheduleCadence {
+    WEEKLY,
+    FIRST_OF_MONTH
 }
 
 @Entity
@@ -30,8 +35,6 @@ enum class DayOfWeek {
 class Schedule(
     @Id
     val id: String = generateUlid(),
-    @Column(name = "post_day_of_week")
-    var postDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
     @Column(name = "post_time")
     var postTime: String = "09:00",
     var channel: Long = 0,
@@ -74,11 +77,15 @@ class Schedule(
             }
             return field
         }
+
+    @Column(name = "schedule_cadence_type")
+    var cadence: ScheduleCadence = ScheduleCadence.WEEKLY
+
+    @Column(name = "post_offset_days")
+    var postOffset: Int = 6
 }
 
 interface ScheduleRepository : JpaRepository<Schedule, String> {
-
-    fun getByPostDayOfWeekAndTimezone(postDayOfWeek: DayOfWeek, timezone: TimeZone): List<Schedule>
 
     @Query("SELECT DISTINCT(a.timezone) FROM Schedule a")
     fun getTimezones(): List<TimeZone>

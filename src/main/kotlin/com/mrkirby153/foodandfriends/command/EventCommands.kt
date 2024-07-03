@@ -72,7 +72,7 @@ class EventCommands(
                             text(false) {
                                 appendLine("**Schedule Debug Information**")
                                 appendLine("Schedule ID: `${realSchedule.id}`")
-                                appendLine("Post Day: `${realSchedule.postDayOfWeek}` @ `${realSchedule.postTime}`")
+                                appendLine("Post Day: `${realSchedule.postOffset}` days prior @ `${realSchedule.postTime}`")
                                 appendLine("Timezone: `${realSchedule.timezone.id}`")
                                 appendLine()
                                 appendLine("**Current Event**")
