@@ -1,40 +1,42 @@
 package com.mrkirby153.foodandfriends.command
 
-import com.mrkirby153.botcore.builder.message
 import com.mrkirby153.botcore.command.slashcommand.dsl.CommandException
 import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.command.slashcommand.dsl.ProvidesSlashCommands
 import com.mrkirby153.botcore.command.slashcommand.dsl.messageContextCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.slashCommand
-import com.mrkirby153.botcore.command.slashcommand.dsl.subCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.int
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.spring.argument
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
-import com.mrkirby153.botcore.confirm
 import com.mrkirby153.botcore.coroutine.await
 import com.mrkirby153.botcore.modal.ModalManager
 import com.mrkirby153.botcore.modal.await
 import com.mrkirby153.foodandfriends.entity.EventRepository
 import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
+import com.mrkirby153.foodandfriends.google.maps.Place
 import com.mrkirby153.foodandfriends.google.maps.PlaceSearchStatus
 import com.mrkirby153.foodandfriends.service.EventService
 import com.mrkirby153.foodandfriends.service.GoogleMapsService
+import com.mrkirby153.interactionmenus.MenuManager
+import com.mrkirby153.interactionmenus.StatefulMenu
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.runBlocking
 import me.mrkirby153.kcutils.spring.coroutine.transaction
-import me.mrkirby153.kcutils.ulid.generateUlid
 import net.dv8tion.jda.api.Permission
-import net.dv8tion.jda.api.entities.User
-import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent
 import net.dv8tion.jda.api.interactions.InteractionHook
+import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle
 import net.dv8tion.jda.api.interactions.components.text.TextInputStyle
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.time.Instant
+import java.time.ZonedDateTime
 import java.util.Calendar
-import kotlin.math.min
+
+
+private class AbortProcessException : Exception()
 
 @Component
 class EventCommands(
@@ -43,7 +45,8 @@ class EventCommands(
     private val shardManager: ShardManager,
     private val googleMapsService: GoogleMapsService,
     private val eventRepository: EventRepository,
-    private val modalManager: ModalManager
+    private val modalManager: ModalManager,
+    private val menuManager: MenuManager
 ) : ProvidesSlashCommands {
 
     private val log = KotlinLogging.logger { }
@@ -55,36 +58,6 @@ class EventCommands(
 
     override fun registerSlashCommands(executor: DslCommandExecutor) {
         executor.registerCommands {
-            slashCommand("location") {
-                defaultPermissions(Permission.MANAGE_SERVER)
-                subCommand("set") {
-                    val location by string { }.required()
-                    val schedule by scheduleRepository.argument(
-                        enableAutocomplete = true, autocompleteName = scheduleAutocompleteName
-                    ) {
-                        description = "The schedule to set the location for"
-                    }.required()
-                    run {
-                        transaction {
-                            var hook = deferReply(true).await()
-                            val realSchedule = schedule()
-                            val activeEvent =
-                                realSchedule.activeEvent
-                                    ?: throw CommandException("No active event")
-
-                            val result = handleGoogleMapsLocation(this@run.user, hook, location())
-                            hook = result.first
-                            eventService.setLocation(activeEvent, result.second)
-                            hook.editOriginal(message {
-                                text(true) {
-                                    append("Set the location to")
-                                    code(result.second)
-                                }
-                            }.edit()).await()
-                        }
-                    }
-                }
-            }
             slashCommand("debug") {
                 disableByDefault()
                 val schedule by scheduleRepository.argument(
@@ -219,13 +192,15 @@ class EventCommands(
                         if (location?.isEmpty() == true) {
                             hook.editOriginal("No location specified!").await()
                         } else {
-                            val (newHook, resolvedLocation) = handleGoogleMapsLocation(
-                                it.user,
+                            val eventTime =
+                                event.getTime().atZone(event.schedule!!.timezone.toZoneId())
+                            handleGoogleMapsLocation(
                                 hook,
+                                eventTime,
                                 location!!
-                            )
-                            eventService.setLocation(event, resolvedLocation)
-                            newHook.editOriginal("Updated the location").await()
+                            ) {
+                                eventService.setLocation(event, it)
+                            }
                         }
                     }
 
@@ -235,15 +210,16 @@ class EventCommands(
     }
 
     private suspend fun handleGoogleMapsLocation(
-        user: User,
         hook: InteractionHook,
-        locationQuery: String
-    ): Pair<InteractionHook, String> {
+        time: ZonedDateTime,
+        locationQuery: String,
+        resultCallback: (String) -> Unit
+    ) {
         if (!googleMapsService.isGoogleMapsEnabled()) {
             log.trace { "Google maps is disabled. Returning literal" }
-            return Pair(hook, locationQuery)
+            resultCallback.invoke(locationQuery)
+            return
         }
-
         val places = if (googleMapsService.isShareUrl(locationQuery)) {
             googleMapsService.resolveShareURL(locationQuery)
         } else {
@@ -252,66 +228,148 @@ class EventCommands(
             val success = searchResults.status == PlaceSearchStatus.OK
             log.trace { "Google returned ${searchResults.results.size}. Success? $success" }
             if (!success) {
-                log.trace { "Returning literal, google result was ${searchResults.status}" }
-                return Pair(hook, locationQuery)
+                emptyList<Place>()
             }
             searchResults.results
         }
-
         if (places.isEmpty()) {
-            log.trace { "Returning literal, google did not return any places" }
-            return Pair(hook, locationQuery)
+            log.trace { "No google results found. Returning literal" }
+            resultCallback.invoke(locationQuery)
+            return
         }
 
-        if (places.size == 1) {
-            // Single result, ask the user to confirm
-            val first = places.first()
-            val address = googleMapsService.getAddress(first.placeId!!)
-            val (newHook, confirmed) = hook.confirm(user, true) {
-                text {
-                    appendLine("Google Maps has resolved the following location:")
-                    code(address)
-                    appendLine("Use this location?")
-                }
-            }
-            return if (confirmed) {
-                newHook.editOriginal("Using the google suggested location: $address").await()
-                Pair(newHook, address)
-            } else {
-                newHook.editOriginal("Using the provided location: $locationQuery").await()
-                Pair(hook, locationQuery)
-            }
+        // Build a menu
+        val startPage = if (places.size > 1) {
+            GoogleMapsMenuPages.MANY_RESULTS
         } else {
-            // Take the first 5 results and display them
-            // TODO: Maybe use Interactions Menus here?
+            GoogleMapsMenuPages.SINGLE_RESULT
+        }
 
-            val firstFive = places.subList(0, min(places.size, 4))
-            val id = generateUlid()
-            val p = firstFive.mapIndexed { index, place -> Pair("${id}-${index}", place) }.toMap()
-            var selectId = ""
-            hook.editOriginal(message {
+        val menu = StatefulMenu<GoogleMapsMenuPages, GoogleMapsMenuState>(
+            startPage,
+            ::GoogleMapsMenuState
+        ) {
+            fun finalizeAddress(address: String) {
+                state.finalLocation = address
+                resultCallback.invoke(address)
+                currentPage = GoogleMapsMenuPages.ADDRESS_SELECTED
+            }
+
+            suspend fun verifyHours(place: Place) {
+                val hours =
+                    googleMapsService.getOperatingHours(place.placeId!!)
+                if (hours.isNotEmpty()) {
+                    log.trace { "Place has hours, checking hours" }
+                    // Check hours
+                    val isOpen =
+                        hours.any { it.isOpenDuringPeriod(time) }
+                    if (!isOpen) {
+                        log.trace { "Place will be closed!" }
+                        state.place = place
+                        currentPage = GoogleMapsMenuPages.PLACE_CLOSED
+                        return
+                    }
+                }
+                val formattedAddress =
+                    googleMapsService.getAddress(place.placeId)
+                finalizeAddress(formattedAddress)
+            }
+            page(GoogleMapsMenuPages.SINGLE_RESULT) {
+                val first = places.first()
+                val address = runBlocking { googleMapsService.getAddress(first.placeId!!) }
                 text {
-                    appendLine("Google Maps has resolved multiple locations. Please select one")
+                    append("Google Maps has resolved the following location:")
+                    appendLine("```\n${address}\n```")
+                    append("Use this location?")
                 }
                 actionRow {
-                    selectId = select {
-                        p.forEach { (id, place) ->
-                            option(id) {
-                                value = place.formattedAddress ?: "No address found"
+                    button("Yes") {
+                        style = ButtonStyle.SUCCESS
+                        onClick {
+                            runBlocking { verifyHours(first) }
+                        }
+                    }
+                    button("No") {
+                        style = ButtonStyle.DANGER
+                        onClick {
+                            finalizeAddress(locationQuery)
+                        }
+                    }
+                }
+            }
+            page(GoogleMapsMenuPages.MANY_RESULTS) {
+                // Prompt the user for the first 5
+                if (places.size > 5) {
+                    text("Google Maps has returned more than 5 results. Please refine your query")
+                } else {
+                    text {
+                        appendLine("Google Maps has resolved multiple locations. Please select one")
+                    }
+                    actionRow {
+                        stringSelect {
+                            places.forEach { place ->
+                                option(place.formattedAddress ?: "No Address Found") {
+                                    onSelect {
+                                        runBlocking {
+                                            verifyHours(place)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }.edit()).await()
-
-            assert(selectId.isNotEmpty())
-
-            val evt = shardManager.await<StringSelectInteractionEvent> {
-                it.componentId == selectId
             }
-            val selected = evt.selectedOptions.first()
-            val place = p[selected.value]?.placeId?.run { googleMapsService.getAddress(this) }
-            return Pair(hook, place ?: locationQuery)
+            page(GoogleMapsMenuPages.PLACE_CLOSED) {
+                text {
+                    val hoursStr =
+                        runBlocking { googleMapsService.getRawOperatingHours(state.place!!.placeId!!) }
+                    appendLine(
+                        "Google maps has indicated that this place is not open on <t:${
+                            time.toEpochSecond()
+                        }>"
+                    )
+                    appendLine("Its reported hours are:")
+                    appendLine("```\n${hoursStr.joinToString("\n")}\n```")
+                    appendLine("Ignore?")
+                }
+                actionRow {
+                    button("Yes") {
+                        style = ButtonStyle.SUCCESS
+                        onClick {
+                            val finalLocation =
+                                runBlocking { googleMapsService.getAddress(state.place!!.placeId!!) }
+                            finalizeAddress(finalLocation)
+                        }
+                    }
+                    button("No") {
+                        style = ButtonStyle.DANGER
+                        onClick {
+                            currentPage = GoogleMapsMenuPages.ABORTED
+                        }
+                    }
+                }
+            }
+            page(GoogleMapsMenuPages.ADDRESS_SELECTED) {
+                text {
+                    append("Updated the address to:```\n${state.finalLocation}\n```")
+                }
+            }
+            page(GoogleMapsMenuPages.ABORTED) {
+                text {
+                    append("Aborted!")
+                }
+            }
         }
+        menuManager.show(menu, hook).queue()
     }
+}
+
+private data class GoogleMapsMenuState(var finalLocation: String? = null, var place: Place? = null)
+private enum class GoogleMapsMenuPages {
+    SINGLE_RESULT,
+    MANY_RESULTS,
+    PLACE_CLOSED,
+    ADDRESS_SELECTED,
+    ABORTED
 }

@@ -129,10 +129,8 @@ class EventManager(
 
     override fun setLocation(event: Event, location: String) {
         event.location = location
-        var new = eventRepository.save(event)
-        new = runBlocking {
-            update(new)
-        }
+        val new = eventRepository.saveAndFlush(event)
+        eventUpdateDebouncer.debounce(event.id, 500, TimeUnit.MILLISECONDS)
         applicationEventPublisher.publishEvent(EventLocationChangeEvent(new, location))
     }
 

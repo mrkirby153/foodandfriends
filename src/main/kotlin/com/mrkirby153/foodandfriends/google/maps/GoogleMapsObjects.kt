@@ -1,6 +1,6 @@
 package com.mrkirby153.foodandfriends.google.maps
 
-import com.fasterxml.jackson.annotation.JsonValue
+import com.mrkirby153.foodandfriends.kutils.GoogleDayOfWeekSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -14,28 +14,15 @@ enum class PlaceSearchStatus {
     UNKNOWN_ERROR
 }
 
-enum class PriceLevel(@JsonValue val level: Int) {
-    FREE(0),
-    INEXPENSIVE(1),
-    MODERATE(2),
-    EXPENSIVE(3),
-    VERY_EXPENSIVE(4);
-
-    companion object {
-        fun from(level: Int): PriceLevel {
-            return enumValues<PriceLevel>().first { it.level == level }
-        }
-    }
-}
-
-enum class DayOfWeek(@JsonValue val day: Int) {
+@Serializable(GoogleDayOfWeekSerializer::class)
+enum class DayOfWeek(val day: Int) {
     SUNDAY(0),
     MONDAY(1),
     TUESDAY(2),
     WEDNESDAY(3),
     THURSDAY(4),
     FRIDAY(5),
-    SATURDAY(6)
+    SATURDAY(6);
 }
 
 @Serializable
@@ -161,7 +148,7 @@ data class PlaceOpeningHoursPeriodDetail(
     val day: DayOfWeek,
     val time: String,
     val date: String? = null,
-    val truncated: Boolean?
+    val truncated: Boolean? = null
 )
 
 @Serializable
