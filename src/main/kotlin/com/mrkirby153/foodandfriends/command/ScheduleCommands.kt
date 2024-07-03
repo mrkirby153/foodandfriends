@@ -46,9 +46,6 @@ class ScheduleCommands(
                 subCommand("add") {
                     val timezone by string {
                     }.required()
-                    val postDayOfWeek by enum<DayOfWeek> {
-                        name = "post_day"
-                    }.required()
                     val postTime by string {
                         name = "post_time"
                     }.required()

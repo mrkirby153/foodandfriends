@@ -19,6 +19,9 @@ import org.springframework.scheduling.TaskScheduler
 import org.springframework.stereotype.Service
 import java.text.SimpleDateFormat
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.util.Calendar
@@ -154,16 +157,19 @@ class ScheduleManager(
         val minute = schedule.eventTime.split(":")[1].toInt()
         when (schedule.cadence) {
             ScheduleCadence.WEEKLY -> {
-                val now = startTime.toLocalTimestamp(schedule.timezone.toZoneId()).toLocalDateTime()
+                val now = LocalDateTime.ofInstant(startTime, schedule.timezone.toZoneId())
+                log.trace { "It is $now" }
                 val eventTime =
                     now.with(TemporalAdjusters.next(schedule.eventDayOfWeek.javaDayOfWeek))
                         .withHour(hour).withMinute(minute).withSecond(0)
+                log.trace { "The event is at $eventTime" }
                 val final = eventTime.atZone(schedule.timezone.toZoneId()).toInstant()
+                log.trace { "The final time is $final" }
                 return final
             }
 
             ScheduleCadence.FIRST_OF_MONTH -> {
-                val now = startTime.toLocalTimestamp(schedule.timezone.toZoneId()).toLocalDateTime()
+                val now = LocalDateTime.ofInstant(startTime, schedule.timezone.toZoneId())
                 log.trace { "It is $now" }
                 val adjuster = TemporalAdjusters.firstInMonth(schedule.eventDayOfWeek.javaDayOfWeek)
                 var eventTime =
