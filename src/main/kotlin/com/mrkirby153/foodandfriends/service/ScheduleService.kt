@@ -6,7 +6,6 @@ import com.mrkirby153.foodandfriends.entity.Order
 import com.mrkirby153.foodandfriends.entity.Schedule
 import com.mrkirby153.foodandfriends.entity.ScheduleCadence
 import com.mrkirby153.foodandfriends.entity.ScheduleRepository
-import com.mrkirby153.foodandfriends.extensions.toLocalTimestamp
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import kotlinx.coroutines.runBlocking
@@ -15,13 +14,13 @@ import net.dv8tion.jda.api.entities.User
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel
 import org.springframework.context.annotation.Lazy
 import org.springframework.context.event.EventListener
+import org.springframework.data.jpa.domain.AbstractPersistable_.id
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.scheduling.TaskScheduler
 import org.springframework.stereotype.Service
 import java.text.SimpleDateFormat
 import java.time.Instant
-import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.util.Calendar
@@ -157,7 +156,7 @@ class ScheduleManager(
         val minute = schedule.eventTime.split(":")[1].toInt()
         when (schedule.cadence) {
             ScheduleCadence.WEEKLY -> {
-                val now = LocalDateTime.ofInstant(startTime, schedule.timezone.toZoneId())
+                val now = LocalDateTime.ofInstant(startTime, schedule.timezone.toZoneId()).truncatedTo(ChronoUnit.SECONDS)
                 log.trace { "It is $now" }
                 val eventTime =
                     now.with(TemporalAdjusters.next(schedule.eventDayOfWeek.javaDayOfWeek))
@@ -169,7 +168,7 @@ class ScheduleManager(
             }
 
             ScheduleCadence.FIRST_OF_MONTH -> {
-                val now = LocalDateTime.ofInstant(startTime, schedule.timezone.toZoneId())
+                val now = LocalDateTime.ofInstant(startTime, schedule.timezone.toZoneId()).truncatedTo(ChronoUnit.SECONDS)
                 log.trace { "It is $now" }
                 val adjuster = TemporalAdjusters.firstInMonth(schedule.eventDayOfWeek.javaDayOfWeek)
                 var eventTime =
@@ -251,7 +250,7 @@ class ScheduleManager(
             nextTriggerJob = null
             nextRunAt = null
         }
-        nextTriggerJob = taskExecutor.schedule({ postNext(schedule) }, postAt)
+        nextTriggerJob = taskExecutor.schedule({ postNext(schedule.id) }, postAt)
         nextRunAt = postAt
         log.info {
             val sdf = SimpleDateFormat("MM-dd-yy HH:mm:ss")
@@ -260,12 +259,17 @@ class ScheduleManager(
         }
     }
 
-    private fun postNext(next: Schedule) {
+    private fun postNext(nextId: String) {
         log.info {
-            "Posting next event for schedule ${next.id}"
+            "Posting next event for schedule $nextId"
         }
-        runBlocking {
-            eventService.createAndPostNextEvent(next)
+        val next = scheduleRepository.findByIdOrNull(nextId)
+        if (next == null) {
+            log.info { "Schedule $id not found" }
+        } else {
+            runBlocking {
+                eventService.createAndPostNextEvent(next)
+            }
         }
         scheduleNextPost()
     }
