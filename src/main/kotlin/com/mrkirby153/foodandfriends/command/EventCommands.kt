@@ -21,7 +21,6 @@ import com.mrkirby153.foodandfriends.service.GoogleMapsService
 import com.mrkirby153.interactionmenus.MenuManager
 import com.mrkirby153.interactionmenus.StatefulMenu
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.runBlocking
 import me.mrkirby153.kcutils.spring.coroutine.transaction
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.interactions.InteractionHook
@@ -34,9 +33,6 @@ import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.util.Calendar
-
-
-private class AbortProcessException : Exception()
 
 @Component
 class EventCommands(
@@ -276,7 +272,7 @@ class EventCommands(
             }
             page(GoogleMapsMenuPages.SINGLE_RESULT) {
                 val first = places.first()
-                val address = runBlocking { googleMapsService.getAddress(first.placeId!!) }
+                val address = googleMapsService.getAddress(first.placeId!!)
                 text {
                     append("Google Maps has resolved the following location:")
                     appendLine("```\n${address}\n```")
@@ -286,7 +282,7 @@ class EventCommands(
                     button("Yes") {
                         style = ButtonStyle.SUCCESS
                         onClick {
-                            runBlocking { verifyHours(first) }
+                            verifyHours(first)
                         }
                     }
                     button("No") {
@@ -310,9 +306,7 @@ class EventCommands(
                             places.forEach { place ->
                                 option(place.formattedAddress ?: "No Address Found") {
                                     onSelect {
-                                        runBlocking {
-                                            verifyHours(place)
-                                        }
+                                        verifyHours(place)
                                     }
                                 }
                             }
@@ -321,9 +315,8 @@ class EventCommands(
                 }
             }
             page(GoogleMapsMenuPages.PLACE_CLOSED) {
+                val hoursStr = googleMapsService.getRawOperatingHours(state.place!!.placeId!!)
                 text {
-                    val hoursStr =
-                        runBlocking { googleMapsService.getRawOperatingHours(state.place!!.placeId!!) }
                     appendLine(
                         "Google maps has indicated that this place is not open on <t:${
                             time.toEpochSecond()
@@ -338,7 +331,7 @@ class EventCommands(
                         style = ButtonStyle.SUCCESS
                         onClick {
                             val finalLocation =
-                                runBlocking { googleMapsService.getAddress(state.place!!.placeId!!) }
+                                googleMapsService.getAddress(state.place!!.placeId!!)
                             finalizeAddress(finalLocation)
                         }
                     }

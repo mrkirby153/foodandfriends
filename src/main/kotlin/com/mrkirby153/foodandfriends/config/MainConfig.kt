@@ -7,6 +7,7 @@ import com.mrkirby153.botcore.spring.config.EnableJpaAutocomplete
 import com.mrkirby153.botcore.spring.config.EnableModalManager
 import com.mrkirby153.botcore.spring.config.RegisterSlashCommands
 import com.mrkirby153.interactionmenus.MenuManager
+import com.mrkirby153.interactionmenus.spring.EnableMenuManager
 import kotlinx.serialization.json.Json
 import me.mrkirby153.kcutils.spring.coroutine.CoroutineTransactionHandler
 import net.dv8tion.jda.api.sharding.ShardManager
@@ -31,6 +32,7 @@ import java.util.concurrent.Executor
 @EnableModalManager
 @RegisterSlashCommands
 @EnableJpaAutocomplete
+@EnableMenuManager
 class MainConfig(
     dslCommandExecutor: DslCommandExecutor,
     shardManager: ShardManager,
@@ -69,11 +71,4 @@ class MainConfig(
 
     @Bean
     fun json() = Json { ignoreUnknownKeys = true }
-
-    @Bean
-    fun menuManager(shardManager: ShardManager): MenuManager {
-        val manager = MenuManager()
-        shardManager.addEventListener(manager)
-        return manager
-    }
 }
