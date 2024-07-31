@@ -223,8 +223,8 @@ class ScheduleManager(
 
     private fun scheduleNextPost() {
         val next = getNextPostTime()
-        if (next == null) {
-            log.debug { "No schedule to post, running again in 1 hour" }
+
+        fun repost() {
             nextTriggerJob?.cancel(true)
             nextRunAt = Instant.now().plus(1, ChronoUnit.HOURS)
             log.debug {
@@ -238,6 +238,15 @@ class ScheduleManager(
             nextTriggerJob = taskExecutor.schedule({
                 scheduleNextPost()
             }, nextRunAt!!)
+        }
+
+        if (next == null) {
+            log.debug { "No schedule to post, running again in 1 hour" }
+            repost()
+            return
+        } else if(next.first.isBefore(Instant.now())) {
+            log.debug { "Next post is in the past, running again in 1 hour" }
+            repost()
             return
         }
         val postAt = next.first
