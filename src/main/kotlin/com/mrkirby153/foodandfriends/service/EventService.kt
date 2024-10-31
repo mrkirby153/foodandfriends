@@ -134,6 +134,7 @@ class EventManager(
         applicationEventPublisher.publishEvent(EventLocationChangeEvent(new, location))
     }
 
+    @Transactional
     override fun setTime(event: Event, timestamp: Instant) {
         event.date = timestamp.toLocalTimestamp(
             event.schedule?.timezone?.toZoneId() ?: ZoneId.systemDefault()
@@ -141,7 +142,9 @@ class EventManager(
         event.absoluteDate = Timestamp.from(timestamp)
         var new = eventRepository.save(event)
         new = runBlocking {
-            update(new)
+            transaction {
+                update(new)
+            }
         }
         applicationEventPublisher.publishEvent(EventTimeChangeEvent(new, timestamp))
     }
