@@ -32,6 +32,13 @@ class GoogleMapsApi {
             val fields: List<String>
         )
     }
+
+    @Resource("timezone/json")
+    class TimeZone(
+        val location: String,
+        val timestamp: String,
+        val parent: GoogleMapsApi = GoogleMapsApi()
+    )
 }
 
 
@@ -53,5 +60,8 @@ object GoogleMapsApiRequests {
     object Places {
         val search by get<GoogleMapsApi.Place.TextSearch, TextSearchResponse>()
         val details by get<GoogleMapsApi.Place.Details, PlacesDetailsResponse>()
+    }
+    object TimeZone {
+        val getAtLocation by get<GoogleMapsApi.TimeZone, TimeZoneResponse>()
     }
 }

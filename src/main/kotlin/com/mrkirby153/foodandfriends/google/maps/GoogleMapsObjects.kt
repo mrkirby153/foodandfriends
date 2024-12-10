@@ -219,3 +219,22 @@ data class Bounds(
     val northeast: LatLong,
     val southwest: LatLong,
 )
+
+enum class TimeZoneStatus {
+    OK,
+    INVALID_REQUEST,
+    OVER_QUERY_LIMIT,
+    REQUEST_DENIED,
+    UNKNOWN_ERROR,
+    ZERO_RESULTS
+}
+
+@Serializable
+data class TimeZoneResponse(
+    val status: TimeZoneStatus,
+    val dstOffset: Int? = null,
+    val errorMessage: String? = null,
+    val rawOffset: Int? = null,
+    val timeZoneId: String? = null,
+    val timeZoneName: String? = null
+)

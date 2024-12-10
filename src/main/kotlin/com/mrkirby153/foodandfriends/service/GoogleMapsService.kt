@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.ZonedDateTime
+import java.util.TimeZone
 import java.util.regex.Pattern
 
 interface GoogleMapsService {
@@ -36,6 +37,8 @@ interface GoogleMapsService {
     suspend fun getOperatingHours(placeId: String): List<OpeningPeriod>
 
     suspend fun getRawOperatingHours(placeId: String): List<String>
+
+    suspend fun getTimezoneAtLocation(placeId: String): TimeZone
 
     fun isShareUrl(url: String): Boolean
 }
@@ -72,26 +75,36 @@ data class TimePeriod(val day: DayOfWeek, private val time: String) {
 }
 
 
-data class OpeningPeriod(val open: TimePeriod, val close: TimePeriod) {
+data class OpeningPeriod(
+    val open: TimePeriod,
+    val close: TimePeriod,
+    private val timezone: TimeZone
+) {
 
     private val log = KotlinLogging.logger {}
 
     fun isOpenDuringPeriod(time: ZonedDateTime): Boolean {
         val dayOfWeek = DAY_OF_WEEK_MAP[time.dayOfWeek]!!
         log.trace { "Comparing $time ($dayOfWeek) to $open and $close" }
+
+        val localTime = time.withZoneSameInstant(timezone.toZoneId())
+
+        log.trace { "Converted $time to $localTime" }
+
+
         // Open and close are on the same day
         if (open.day == close.day) {
             if (dayOfWeek != open.day)
                 return false
             // time must be between hour and minute
-            val hour = time.hour
-            val minute = time.minute
+            val hour = localTime.hour
+            val minute = localTime.minute
             return hour >= open.hour && minute >= open.minute && hour <= close.hour && minute <= close.minute
         } else {
             // Close is after open and on different days
             assert(open.day.day < close.day.day)
-            val hour = time.hour
-            val minute = time.minute
+            val hour = localTime.hour
+            val minute = localTime.minute
 
             return when (dayOfWeek) {
                 open.day -> {
@@ -118,7 +131,7 @@ data class OpeningPeriod(val open: TimePeriod, val close: TimePeriod) {
 class GoogleMapsManager(
     private val googleMapsConfig: GoogleMapsConfig,
     @Qualifier("mapsHttpClient") private val client: HttpClient,
-    @Value("\${google.maps.origin:}") googleMapsOrigin: String?
+    @Value("\${google.maps.origin:}") googleMapsOrigin: String?,
 ) : GoogleMapsService {
 
     private final val addressComponents = arrayOf(
@@ -143,6 +156,7 @@ class GoogleMapsManager(
 
     init {
         log.info { "Initializing Google Maps API Service? ${isGoogleMapsEnabled()}" }
+        log.info { "Google Maps API Origin: $googleMapsLocation" }
     }
 
     override fun isGoogleMapsEnabled(): Boolean {
@@ -229,7 +243,8 @@ class GoogleMapsManager(
             log.trace { "Operating ${it.open.day} @ ${it.open.time} -> ${it.close.day} @ ${it.close.time}" }
             OpeningPeriod(
                 TimePeriod(it.open.day, it.open.time),
-                TimePeriod(it.close.day, it.close.time)
+                TimePeriod(it.close.day, it.close.time),
+                getTimezoneAtLocation(placeId)
             )
         } ?: emptyList()
     }
@@ -240,6 +255,22 @@ class GoogleMapsManager(
             GoogleMapsApi.Place.Details(placeId = placeId, fields = listOf("opening_hours"))
         )
         return place.result.openingHours?.weekdayText ?: emptyList()
+    }
+
+    override suspend fun getTimezoneAtLocation(placeId: String): TimeZone {
+        val place = GoogleMapsApiRequests.Places.details(
+            client,
+            GoogleMapsApi.Place.Details(placeId = placeId, fields = listOf("geometry"))
+        )
+        val location = place.result.geometry!!.location
+        val timezone = GoogleMapsApiRequests.TimeZone.getAtLocation(
+            client,
+            GoogleMapsApi.TimeZone(
+                location = "${location.lat},${location.long}",
+                timestamp = "${System.currentTimeMillis() / 1000}"
+            )
+        )
+        return TimeZone.getTimeZone(timezone.timeZoneId)
     }
 
     override fun isShareUrl(url: String): Boolean {
