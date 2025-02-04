@@ -291,10 +291,11 @@ class EventCommands(
                         style = ButtonStyle.SUCCESS
                         onClick {
                             selectPlace(first)
-                            currentPage = if ((state.place?.size ?: 0) > 1) {
-                                GoogleMapsMenuPages.MULTIPLE_LOCATION_NAMES
+                            if ((state.place?.size ?: 0) > 1) {
+                                currentPage =  GoogleMapsMenuPages.MULTIPLE_LOCATION_NAMES
                             } else {
-                                GoogleMapsMenuPages.LOCATION_NAME
+                                currentPage = GoogleMapsMenuPages.LOCATION_NAME
+                                state.locationName = state.place?.first()?.name
                             }
                         }
                     }
