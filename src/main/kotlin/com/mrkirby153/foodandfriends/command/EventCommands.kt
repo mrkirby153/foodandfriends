@@ -266,13 +266,13 @@ class EventCommands(
             suspend fun selectPlace(place: Place, verifyHours: Boolean = true) {
                 val maybeAsRestaurant = googleMapsService.placeToRestaurant(place)
                 val formattedAddress = googleMapsService.getAddress(place.placeId!!)
-                if (verifyHours(place) || !verifyHours) {
-                    // Place is open
-                    state.finalLocation = formattedAddress
-                    state.locationName = maybeAsRestaurant?.name
+                state.place = if (maybeAsRestaurant.isEmpty()) {
+                    listOf(place)
                 } else {
-                    // Place is closed. Prompt the user to confirm
-                    state.place = maybeAsRestaurant ?: place
+                    maybeAsRestaurant
+                }
+                state.finalLocation = formattedAddress
+                if (!verifyHours(place) && verifyHours) {
                     currentPage = GoogleMapsMenuPages.PLACE_CLOSED
                 }
             }
@@ -291,7 +291,11 @@ class EventCommands(
                         style = ButtonStyle.SUCCESS
                         onClick {
                             selectPlace(first)
-                            currentPage = GoogleMapsMenuPages.LOCATION_NAME
+                            currentPage = if ((state.place?.size ?: 0) > 1) {
+                                GoogleMapsMenuPages.MULTIPLE_LOCATION_NAMES
+                            } else {
+                                GoogleMapsMenuPages.LOCATION_NAME
+                            }
                         }
                     }
                     button("No") {
@@ -318,7 +322,11 @@ class EventCommands(
                                 option(place.formattedAddress ?: "No Address Found") {
                                     onSelect {
                                         selectPlace(place)
-                                        currentPage = GoogleMapsMenuPages.LOCATION_NAME
+                                        currentPage = if ((state.place?.size ?: 0) > 1) {
+                                            GoogleMapsMenuPages.MULTIPLE_LOCATION_NAMES
+                                        } else {
+                                            GoogleMapsMenuPages.LOCATION_NAME
+                                        }
                                     }
                                 }
                             }
@@ -328,7 +336,8 @@ class EventCommands(
             }
 
             page(GoogleMapsMenuPages.PLACE_CLOSED) {
-                val hoursStr = googleMapsService.getRawOperatingHours(state.place!!.placeId!!)
+                val place = state.place!!.first()
+                val hoursStr = googleMapsService.getRawOperatingHours(place.placeId!!)
                 text {
                     appendLine(
                         "Google maps has indicated that this place is not open on <t:${
@@ -343,7 +352,7 @@ class EventCommands(
                     button("Yes") {
                         style = ButtonStyle.SUCCESS
                         onClick {
-                            selectPlace(state.place!!, false)
+                            selectPlace(place, false)
                             currentPage = GoogleMapsMenuPages.LOCATION_NAME
                         }
                     }
@@ -359,7 +368,7 @@ class EventCommands(
             page(GoogleMapsMenuPages.LOCATION_NAME) {
                 text {
                     appendLine("Search query resolved to:")
-                    if(state.locationName != null) {
+                    if (state.locationName != null) {
                         appendLine("**Name:** ${state.locationName}")
                     }
                     appendLine("**Address:** ${state.finalLocation}")
@@ -381,10 +390,33 @@ class EventCommands(
                 }
             }
 
+            page(GoogleMapsMenuPages.MULTIPLE_LOCATION_NAMES) {
+                text {
+                    appendLine("Google Maps has resolved multiple restaurants. Please select one")
+                }
+                actionRow {
+                    stringSelect {
+                        (state.place ?: emptyList()).take(4).forEach { place ->
+                            option(place.name ?: "No Name") {
+                                onSelect {
+                                    state.locationName = place.name
+                                    currentPage = GoogleMapsMenuPages.LOCATION_NAME
+                                }
+                            }
+                        }
+                        option("None of these") {
+                            onSelect { hook ->
+                                currentPage = GoogleMapsMenuPages.LOCATION_NAME
+                            }
+                        }
+                    }
+                }
+            }
+
             page(GoogleMapsMenuPages.FINAL) {
                 text {
                     appendLine("Updated the address to:```")
-                    if(state.locationName != null) {
+                    if (state.locationName != null) {
                         appendLine("Name: ${state.locationName}")
                     }
                     appendLine("Address: ${state.finalLocation}")
@@ -404,13 +436,14 @@ class EventCommands(
 
 private data class GoogleMapsMenuState(
     var finalLocation: String? = null,
-    var place: Place? = null,
+    var place: List<Place>? = null,
     var locationName: String? = null
 )
 
 private enum class GoogleMapsMenuPages {
     SINGLE_RESULT,
     MANY_RESULTS,
+    MULTIPLE_LOCATION_NAMES,
     PLACE_CLOSED,
     FINAL,
     ABORTED,

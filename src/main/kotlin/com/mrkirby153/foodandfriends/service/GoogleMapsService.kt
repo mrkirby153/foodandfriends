@@ -42,7 +42,7 @@ interface GoogleMapsService {
 
     suspend fun getEstablishmentName(placeId: String): String?
 
-    suspend fun placeToRestaurant(place: Place): Place?
+    suspend fun placeToRestaurant(place: Place): List<Place>
 
     suspend fun getAddressComponents(place: Place): List<AddressComponent>
 
@@ -287,12 +287,12 @@ class GoogleMapsManager(
         return place.result.name
     }
 
-    override suspend fun placeToRestaurant(place: Place): Place? {
+    override suspend fun placeToRestaurant(place: Place): List<Place> {
         log.trace { "Turning address place ${place.adrAddress}" }
         val addressComponents = place.addressComponents ?: getAddressComponents(place)
         if (addressComponents.isEmpty()) {
             log.trace { "Place has no address components" }
-            return null
+            return emptyList()
         }
         val nearby = GoogleMapsApiRequests.Places.nearby(
             client,
@@ -304,7 +304,7 @@ class GoogleMapsManager(
         )
         if (nearby.status != PlaceSearchStatus.OK) {
             log.trace { "Failed to find nearby places" }
-            return null
+            return emptyList()
         }
         log.trace { "Discovered ${nearby.results.size} nearby restaurants" }
         log.trace {
@@ -315,14 +315,14 @@ class GoogleMapsManager(
             }
         }
 
-        return nearby.results.firstOrNull {
+        return nearby.results.filter {
             val components = GoogleMapsApiRequests.Places.details(
                 client,
                 GoogleMapsApi.Place.Details(
                     placeId = it.placeId!!,
                     fields = listOf("address_components")
                 )
-            ).result.addressComponents ?: return@firstOrNull false
+            ).result.addressComponents ?: return@filter false
             compareAddressComponents(components, addressComponents)
         }
     }
