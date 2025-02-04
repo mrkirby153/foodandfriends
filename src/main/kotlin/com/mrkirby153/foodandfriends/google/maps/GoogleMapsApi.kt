@@ -31,6 +31,27 @@ class GoogleMapsApi {
             @Serializable(PlacesFieldSerializer::class)
             val fields: List<String>
         )
+
+        @Resource("nearbysearch/json")
+        class Nearby(
+            val parent: Place = Place(),
+            val location: String,
+            val radius: Int = 100,
+            val keyword: String? = null,
+            val language: String? = null,
+            @SerialName("maxprice")
+            val maxPrice: Int? = null,
+            @SerialName("minprice")
+            val minPrice: Int? = null,
+            @SerialName("opennow")
+            val openNow: Boolean? = null,
+            @SerialName("pagetoken")
+            val pageToken: String? = null,
+            @SerialName("rankby")
+            val rankBy: String? = null,
+            @SerialName("type")
+            val type: String? = null
+        )
     }
 
     @Resource("timezone/json")
@@ -60,7 +81,9 @@ object GoogleMapsApiRequests {
     object Places {
         val search by get<GoogleMapsApi.Place.TextSearch, TextSearchResponse>()
         val details by get<GoogleMapsApi.Place.Details, PlacesDetailsResponse>()
+        val nearby by get<GoogleMapsApi.Place.Nearby, PlacesNearbySearchResponse>()
     }
+
     object TimeZone {
         val getAtLocation by get<GoogleMapsApi.TimeZone, TimeZoneResponse>()
     }

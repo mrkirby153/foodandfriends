@@ -41,6 +41,9 @@ class Event(
     @Column(name = "log_message_id")
     var logMessageId: Long? = null
 
+    @Column(name = "location_name")
+    var locationName: String? = null
+
 
     fun getTime(): Instant {
         val calendar = Calendar.getInstance(schedule?.timezone ?: TimeZone.getTimeZone("UTC"))

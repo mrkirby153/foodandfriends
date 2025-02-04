@@ -151,7 +151,14 @@ class GoogleCalendarManager(
         log.trace { "Building new invite for ${event.id} (${event.absoluteDate}) at ${event.date} in timezone ${event.schedule?.timezone?.id}" }
 
         return GoogleCalendarEvent().apply {
-            location = event.location
+            location = event.location?.let {
+                buildString {
+                    if(event.locationName != null) {
+                        appendLine(event.locationName)
+                    }
+                    append(it)
+                }
+            }
             summary = "Food & Friends"
             start =
                 EventDateTime().setDateTime(

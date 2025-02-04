@@ -42,7 +42,7 @@ interface EventService {
 
     fun getByMessage(messageId: Long): Event?
 
-    fun setLocation(event: Event, location: String)
+    fun setLocation(event: Event, location: String, locationName: String?)
 
     fun setTime(event: Event, timestamp: Instant)
 
@@ -127,8 +127,9 @@ class EventManager(
         return eventRepository.getByDiscordMessageId(messageId)
     }
 
-    override fun setLocation(event: Event, location: String) {
+    override fun setLocation(event: Event, location: String, locationName: String?) {
         event.location = location
+        event.locationName = locationName
         val new = eventRepository.saveAndFlush(event)
         eventUpdateDebouncer.debounce(event.id, 500, TimeUnit.MILLISECONDS)
         applicationEventPublisher.publishEvent(EventLocationChangeEvent(new, location))
@@ -175,8 +176,14 @@ class EventManager(
                 appendLine(event.schedule!!.message)
                 if (event.location != null) {
                     appendLine()
-                    if (event.location?.isBlank() == false)
-                        appendLine("Location: ${event.location}")
+                    if (event.location?.isBlank() == false) {
+                        append("Location: ")
+                        if(event.locationName?.isBlank() == false) {
+                            append(event.locationName!!)
+                            append(":")
+                        }
+                        appendLine(" ${event.location}")
+                    }
                 }
             }
             if (event.attendees.isNotEmpty())

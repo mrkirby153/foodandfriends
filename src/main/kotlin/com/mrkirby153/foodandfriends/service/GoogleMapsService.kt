@@ -40,6 +40,12 @@ interface GoogleMapsService {
 
     suspend fun getTimezoneAtLocation(placeId: String): TimeZone
 
+    suspend fun getEstablishmentName(placeId: String): String?
+
+    suspend fun placeToRestaurant(place: Place): Place?
+
+    suspend fun getAddressComponents(place: Place): List<AddressComponent>
+
     fun isShareUrl(url: String): Boolean
 }
 
@@ -271,6 +277,76 @@ class GoogleMapsManager(
             )
         )
         return TimeZone.getTimeZone(timezone.timeZoneId)
+    }
+
+    override suspend fun getEstablishmentName(placeId: String): String? {
+        val place = GoogleMapsApiRequests.Places.details(
+            client,
+            GoogleMapsApi.Place.Details(placeId = placeId, fields = listOf("name"))
+        )
+        return place.result.name
+    }
+
+    override suspend fun placeToRestaurant(place: Place): Place? {
+        log.trace { "Turning address place ${place.adrAddress}" }
+        val addressComponents = place.addressComponents ?: getAddressComponents(place)
+        if (addressComponents.isEmpty()) {
+            log.trace { "Place has no address components" }
+            return null
+        }
+        val nearby = GoogleMapsApiRequests.Places.nearby(
+            client,
+            GoogleMapsApi.Place.Nearby(
+                location = place.geometry!!.location.toHumanReadable(),
+                type = "restaurant",
+                radius = 50
+            )
+        )
+        if (nearby.status != PlaceSearchStatus.OK) {
+            log.trace { "Failed to find nearby places" }
+            return null
+        }
+        log.trace { "Discovered ${nearby.results.size} nearby restaurants" }
+        log.trace {
+            buildString {
+                nearby.results.forEach {
+                    appendLine(" - ${it.name} (${it.placeId})")
+                }
+            }
+        }
+
+        return nearby.results.firstOrNull {
+            val components = GoogleMapsApiRequests.Places.details(
+                client,
+                GoogleMapsApi.Place.Details(
+                    placeId = it.placeId!!,
+                    fields = listOf("address_components")
+                )
+            ).result.addressComponents ?: return@firstOrNull false
+            compareAddressComponents(components, addressComponents)
+        }
+    }
+
+    override suspend fun getAddressComponents(place: Place): List<AddressComponent> {
+        log.trace { "Fetching address components for ${place.placeId}" }
+        val place = GoogleMapsApiRequests.Places.details(
+            client,
+            GoogleMapsApi.Place.Details(placeId = place.placeId!!, fields = listOf("address_components"))
+        )
+        return place.result.addressComponents ?: emptyList()
+    }
+
+
+    private fun compareAddressComponents(
+        first: List<AddressComponent>,
+        second: List<AddressComponent>
+    ): Boolean {
+        val firstMap = first.associateBy { it.types.joinToString(".") }
+        val secondMap = second.associateBy { it.types.joinToString(".") }
+        // We only care about the keys matching because the second map may be more specific
+        return firstMap.all { (key, value) ->
+            value.longName == secondMap[key]?.longName
+        }
     }
 
     override fun isShareUrl(url: String): Boolean {

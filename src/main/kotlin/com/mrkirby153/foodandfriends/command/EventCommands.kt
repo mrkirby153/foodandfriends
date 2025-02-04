@@ -194,8 +194,8 @@ class EventCommands(
                                 hook,
                                 eventTime,
                                 location!!
-                            ) {
-                                eventService.setLocation(event, it)
+                            ) { location, name ->
+                                eventService.setLocation(event, location, name)
                             }
                         }
                     }
@@ -209,49 +209,44 @@ class EventCommands(
         hook: InteractionHook,
         time: ZonedDateTime,
         locationQuery: String,
-        resultCallback: (String) -> Unit
+        resultCallback: (String, String?) -> Unit
     ) {
-        if (!googleMapsService.isGoogleMapsEnabled()) {
-            log.trace { "Google maps is disabled. Returning literal" }
-            resultCallback.invoke(locationQuery)
-            return
-        }
-        val places = if (googleMapsService.isShareUrl(locationQuery)) {
-            googleMapsService.resolveShareURL(locationQuery)
-        } else {
-            log.trace { "Searching google for \"$locationQuery\"" }
-            val searchResults = googleMapsService.search(locationQuery)
-            val success = searchResults.status == PlaceSearchStatus.OK
-            log.trace { "Google returned ${searchResults.results.size}. Success? $success" }
-            if (!success) {
-                emptyList<Place>()
+        val initialPage: GoogleMapsMenuPages
+        val places: List<Place>
+        if (googleMapsService.isGoogleMapsEnabled()) {
+            places = if (googleMapsService.isShareUrl(locationQuery)) {
+                googleMapsService.resolveShareURL(locationQuery)
+            } else {
+                log.trace { "Searching google for \"$locationQuery\"" }
+                val searchResults = googleMapsService.search(locationQuery)
+                val success = searchResults.status == PlaceSearchStatus.OK
+                log.trace { "Google returned ${searchResults.results.size}. Success? $success" }
+                if (!success) {
+                    emptyList<Place>()
+                }
+                searchResults.results
             }
-            searchResults.results
-        }
-        if (places.isEmpty()) {
-            log.trace { "No google results found. Returning literal" }
-            resultCallback.invoke(locationQuery)
-            return
-        }
-
-        // Build a menu
-        val startPage = if (places.size > 1) {
-            GoogleMapsMenuPages.MANY_RESULTS
+            if (places.isEmpty()) {
+                initialPage = GoogleMapsMenuPages.LOCATION_NAME
+            } else {
+                initialPage = if (places.size > 1) {
+                    GoogleMapsMenuPages.MANY_RESULTS
+                } else {
+                    GoogleMapsMenuPages.SINGLE_RESULT
+                }
+            }
         } else {
-            GoogleMapsMenuPages.SINGLE_RESULT
+            initialPage = GoogleMapsMenuPages.LOCATION_NAME
+            places = emptyList()
         }
 
         val menu = StatefulMenu<GoogleMapsMenuPages, GoogleMapsMenuState>(
-            startPage,
+            initialPage,
             ::GoogleMapsMenuState
         ) {
-            fun finalizeAddress(address: String) {
-                state.finalLocation = address
-                resultCallback.invoke(address)
-                currentPage = GoogleMapsMenuPages.ADDRESS_SELECTED
-            }
 
-            suspend fun verifyHours(place: Place) {
+
+            suspend fun verifyHours(place: Place): Boolean {
                 val hours =
                     googleMapsService.getOperatingHours(place.placeId!!)
                 if (hours.isNotEmpty()) {
@@ -261,15 +256,28 @@ class EventCommands(
                         hours.any { it.isOpenDuringPeriod(time) }
                     if (!isOpen) {
                         log.trace { "Place will be closed!" }
-                        state.place = place
-                        currentPage = GoogleMapsMenuPages.PLACE_CLOSED
-                        return
+                        return false
                     }
                 }
-                val formattedAddress =
-                    googleMapsService.getAddress(place.placeId)
-                finalizeAddress(formattedAddress)
+                return true
             }
+
+
+            suspend fun selectPlace(place: Place, verifyHours: Boolean = true) {
+                val maybeAsRestaurant = googleMapsService.placeToRestaurant(place)
+                val formattedAddress = googleMapsService.getAddress(place.placeId!!)
+                if (verifyHours(place) || !verifyHours) {
+                    // Place is open
+                    state.finalLocation = formattedAddress
+                    state.locationName = maybeAsRestaurant?.name
+                } else {
+                    // Place is closed. Prompt the user to confirm
+                    state.place = maybeAsRestaurant ?: place
+                    currentPage = GoogleMapsMenuPages.PLACE_CLOSED
+                }
+            }
+
+
             page(GoogleMapsMenuPages.SINGLE_RESULT) {
                 val first = places.first()
                 val address = googleMapsService.getAddress(first.placeId!!)
@@ -282,19 +290,22 @@ class EventCommands(
                     button("Yes") {
                         style = ButtonStyle.SUCCESS
                         onClick {
-                            verifyHours(first)
+                            selectPlace(first)
+                            currentPage = GoogleMapsMenuPages.LOCATION_NAME
                         }
                     }
                     button("No") {
                         style = ButtonStyle.DANGER
                         onClick {
-                            finalizeAddress(locationQuery)
+                            // Did not select the location, use what was passed in
+                            state.finalLocation = address
+                            currentPage = GoogleMapsMenuPages.LOCATION_NAME
                         }
                     }
                 }
             }
+
             page(GoogleMapsMenuPages.MANY_RESULTS) {
-                // Prompt the user for the first 5
                 if (places.size > 5) {
                     text("Google Maps has returned more than 5 results. Please refine your query")
                 } else {
@@ -306,7 +317,8 @@ class EventCommands(
                             places.forEach { place ->
                                 option(place.formattedAddress ?: "No Address Found") {
                                     onSelect {
-                                        verifyHours(place)
+                                        selectPlace(place)
+                                        currentPage = GoogleMapsMenuPages.LOCATION_NAME
                                     }
                                 }
                             }
@@ -314,6 +326,7 @@ class EventCommands(
                     }
                 }
             }
+
             page(GoogleMapsMenuPages.PLACE_CLOSED) {
                 val hoursStr = googleMapsService.getRawOperatingHours(state.place!!.placeId!!)
                 text {
@@ -330,9 +343,8 @@ class EventCommands(
                     button("Yes") {
                         style = ButtonStyle.SUCCESS
                         onClick {
-                            val finalLocation =
-                                googleMapsService.getAddress(state.place!!.placeId!!)
-                            finalizeAddress(finalLocation)
+                            selectPlace(state.place!!, false)
+                            currentPage = GoogleMapsMenuPages.LOCATION_NAME
                         }
                     }
                     button("No") {
@@ -343,11 +355,43 @@ class EventCommands(
                     }
                 }
             }
-            page(GoogleMapsMenuPages.ADDRESS_SELECTED) {
+
+            page(GoogleMapsMenuPages.LOCATION_NAME) {
                 text {
-                    append("Updated the address to:```\n${state.finalLocation}\n```")
+                    appendLine("Search query resolved to:")
+                    if(state.locationName != null) {
+                        appendLine("**Name:** ${state.locationName}")
+                    }
+                    appendLine("**Address:** ${state.finalLocation}")
+                }
+                actionRow {
+                    button("Confirm") {
+                        style = ButtonStyle.SUCCESS
+                        onClick {
+                            resultCallback(state.finalLocation!!, state.locationName)
+                            currentPage = GoogleMapsMenuPages.FINAL
+                        }
+                    }
+                    button("Abort") {
+                        style = ButtonStyle.DANGER
+                        onClick {
+                            currentPage = GoogleMapsMenuPages.ABORTED
+                        }
+                    }
                 }
             }
+
+            page(GoogleMapsMenuPages.FINAL) {
+                text {
+                    appendLine("Updated the address to:```")
+                    if(state.locationName != null) {
+                        appendLine("Name: ${state.locationName}")
+                    }
+                    appendLine("Address: ${state.finalLocation}")
+                    append("```")
+                }
+            }
+
             page(GoogleMapsMenuPages.ABORTED) {
                 text {
                     append("Aborted!")
@@ -358,11 +402,17 @@ class EventCommands(
     }
 }
 
-private data class GoogleMapsMenuState(var finalLocation: String? = null, var place: Place? = null)
+private data class GoogleMapsMenuState(
+    var finalLocation: String? = null,
+    var place: Place? = null,
+    var locationName: String? = null
+)
+
 private enum class GoogleMapsMenuPages {
     SINGLE_RESULT,
     MANY_RESULTS,
     PLACE_CLOSED,
-    ADDRESS_SELECTED,
-    ABORTED
+    FINAL,
+    ABORTED,
+    LOCATION_NAME
 }

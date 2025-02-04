@@ -74,6 +74,7 @@ data class Place(
     val iconMaskBaseUri: String? = null,
     @SerialName("international_phone_number")
     val internationalPhoneNumber: String? = null,
+    val name: String? = null,
     @SerialName("opening_hours")
     val openingHours: PlaceOpeningHours? = null,
     val photos: List<PlacePhoto>? = null,
@@ -212,7 +213,11 @@ data class LatLong(
     val lat: Float,
     @SerialName("lng")
     val long: Float
-)
+) {
+    fun toHumanReadable(): String {
+        return "$lat,$long"
+    }
+}
 
 @Serializable
 data class Bounds(
@@ -237,4 +242,17 @@ data class TimeZoneResponse(
     val rawOffset: Int? = null,
     val timeZoneId: String? = null,
     val timeZoneName: String? = null
+)
+
+@Serializable
+data class PlacesNearbySearchResponse(
+    @SerialName("html_attributions")
+    val htmlAttributions: List<String>,
+    val results: List<Place>,
+    val status: PlaceSearchStatus,
+    val errorMessage: String? = null,
+    @SerialName("info_messages")
+    val infoMessages : List<String>? = null,
+    @SerialName("next_page_token")
+    val nextPageToken: String? = null
 )

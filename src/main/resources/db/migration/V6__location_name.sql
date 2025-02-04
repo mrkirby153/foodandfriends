@@ -1,0 +1,1 @@
+ALTER TABLE event ADD COLUMN location_name text DEFAULT NULL;
