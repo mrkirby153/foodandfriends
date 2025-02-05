@@ -42,7 +42,7 @@ dependencies {
     implementation("me.mrkirby153:KirbyUtils-Common:7.0-SNAPSHOT")
     implementation("me.mrkirby153:KirbyUtils-Spring:7.0-SNAPSHOT")
     implementation("com.mrkirby153:bot-core:8.0-SNAPSHOT")
-    implementation("com.mrkirby153:interaction-menus:3.0-SNAPSHOT")
+    implementation("com.mrkirby153:interaction-menus:4.0-SNAPSHOT")
     implementation("net.dv8tion:JDA:5.3.0")
     implementation("io.github.oshai:kotlin-logging-jvm:6.0.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

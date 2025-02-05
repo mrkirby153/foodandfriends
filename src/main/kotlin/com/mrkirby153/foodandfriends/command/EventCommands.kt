@@ -407,6 +407,19 @@ class EventCommands(
                         }
                         option("None of these") {
                             onSelect { hook ->
+                                val modal = modalManager.build {
+                                    title = "Location Name"
+                                    textInput("location") {
+                                        name = "Location Name"
+                                        placeholder = "Enter the name of the location"
+                                    }
+                                }
+
+                                hook.displayModal(modal)
+                                val results = modalManager.await(modal)
+                                results.deferEdit().await()
+
+                                state.locationName = results.data["location"]
                                 currentPage = GoogleMapsMenuPages.LOCATION_NAME
                             }
                         }
