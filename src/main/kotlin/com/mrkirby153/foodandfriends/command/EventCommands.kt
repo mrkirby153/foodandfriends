@@ -5,6 +5,7 @@ import com.mrkirby153.botcore.command.slashcommand.dsl.DslCommandExecutor
 import com.mrkirby153.botcore.command.slashcommand.dsl.ProvidesSlashCommands
 import com.mrkirby153.botcore.command.slashcommand.dsl.messageContextCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.slashCommand
+import com.mrkirby153.botcore.command.slashcommand.dsl.subCommand
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.int
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.spring.argument
 import com.mrkirby153.botcore.command.slashcommand.dsl.types.string
@@ -159,6 +160,28 @@ class EventCommands(
                             append("Rescheduled from <t:${old / 1000}> to <t:${calendar.timeInMillis / 1000}>!")
                         }
                     }.await()
+                }
+            }
+
+            slashCommand("refresh") {
+                defaultPermissions(Permission.MANAGE_SERVER)
+                subCommand("event") {
+                    val schedule by scheduleRepository.argument(
+                        enableAutocomplete = true,
+                        autocompleteName = scheduleAutocompleteName
+                    ).required()
+
+                    run {
+                        val realSchedule = schedule()
+                        val activeEvent =
+                            realSchedule.activeEvent ?: throw CommandException("No active event")
+                        eventService.updateEvent(activeEvent)
+                        reply(true) {
+                            text {
+                                append("Scheduled refresh of event ${activeEvent.id}")
+                            }
+                        }.await()
+                    }
                 }
             }
 

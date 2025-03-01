@@ -46,6 +46,8 @@ interface EventService {
 
     fun setTime(event: Event, timestamp: Instant)
 
+    fun updateEvent(event: Event)
+
     suspend fun createAndPostNextEvent(schedule: Schedule): Event
 }
 
@@ -150,6 +152,10 @@ class EventManager(
         applicationEventPublisher.publishEvent(EventTimeChangeEvent(new, timestamp))
     }
 
+    override fun updateEvent(event: Event) {
+        eventUpdateDebouncer.debounce(event.id, 1, TimeUnit.SECONDS)
+    }
+
     @Transactional
     override suspend fun createAndPostNextEvent(schedule: Schedule): Event {
         val nextEvent = createNextEvent(schedule)
@@ -167,13 +173,20 @@ class EventManager(
         eventUpdateDebouncer.debounce(locationChangeEvent.event.id, 1, TimeUnit.SECONDS)
     }
 
+    @EventListener
+    fun onTimeChange(timeChangeEvent: EventTimeChangeEvent) {
+        eventUpdateDebouncer.debounce(timeChangeEvent.event.id, 1, TimeUnit.SECONDS)
+    }
+
     private suspend fun buildMessage(event: Event): MessageBuilder {
         val rsvps = event.attendees.groupBy { it.person }.mapKeys { (person) ->
             shardManager.retrieveUserById(person.discordUserId).await()
         }
         return message {
             text {
-                appendLine(event.schedule!!.message)
+                var message = event.schedule!!.message
+                message = message.replace("{time}", "<t:${event.absoluteDate.toInstant().epochSecond}>")
+                appendLine(message)
                 if (event.location != null) {
                     appendLine()
                     if (event.location?.isBlank() == false) {
