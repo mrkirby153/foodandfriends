@@ -1,4 +1,4 @@
-FROM gradle:8.5-jdk21-alpine as builder
+FROM gradle:8.10-jdk21-alpine as builder
 
 ADD . /build
 WORKDIR /build
@@ -7,7 +7,7 @@ RUN gradle bootJar
 
 RUN rm -rfv build/libs/*-plain.jar && find build/libs -type f -name 'foodandfriends-?.*\.jar' -exec mv -v '{}' bot.jar ';'
 
-FROM openjdk:21
+FROM openjdk:23
 
 RUN useradd -u 1000 bot
 

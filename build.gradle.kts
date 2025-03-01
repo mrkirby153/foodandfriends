@@ -26,7 +26,7 @@ repositories {
     mavenLocal()
     mavenCentral()
     maven {
-        url = uri("https://repo.mrkirby153.com/repository/maven-public/")
+        url = uri("https://repo.mrkirby153.com/public/")
         name = "mrkirby153"
     }
 }
