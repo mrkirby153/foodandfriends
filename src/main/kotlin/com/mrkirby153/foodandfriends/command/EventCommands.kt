@@ -24,9 +24,9 @@ import com.mrkirby153.interactionmenus.StatefulMenu
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.mrkirby153.kcutils.spring.coroutine.transaction
 import net.dv8tion.jda.api.Permission
+import net.dv8tion.jda.api.components.buttons.ButtonStyle
+import net.dv8tion.jda.api.components.textinput.TextInputStyle
 import net.dv8tion.jda.api.interactions.InteractionHook
-import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle
-import net.dv8tion.jda.api.interactions.components.text.TextInputStyle
 import net.dv8tion.jda.api.sharding.ShardManager
 import org.springframework.stereotype.Component
 import java.text.ParseException
@@ -196,12 +196,14 @@ class EventCommands(
                             ?: throw CommandException("Event not found")
                         val modal = modalManager.build {
                             title = "Set Event Location"
-                            textInput("location") {
-                                name = "Location"
-                                style = TextInputStyle.PARAGRAPH
-                                value =
-                                    if (event.location?.isBlank() == true) null else event.location
-                                max = 2048
+                            actionRow {
+                                text("location", "Location") {
+                                    style(TextInputStyle.PARAGRAPH)
+                                    if (event.location?.isBlank() != true) {
+                                        value(event.location!!)
+                                    }
+                                    maxLength(2048)
+                                }
                             }
                         }
                         it.replyModal(modal).await()
@@ -289,10 +291,8 @@ class EventCommands(
             suspend fun selectPlace(place: Place, verifyHours: Boolean = true) {
                 val maybeAsRestaurant = googleMapsService.placeToRestaurant(place)
                 val formattedAddress = googleMapsService.getAddress(place.placeId!!)
-                state.place = if (maybeAsRestaurant.isEmpty()) {
+                state.place = maybeAsRestaurant.ifEmpty {
                     listOf(place)
-                } else {
-                    maybeAsRestaurant
                 }
                 state.finalLocation = formattedAddress
                 if (!verifyHours(place) && verifyHours) {
@@ -315,7 +315,7 @@ class EventCommands(
                         onClick {
                             selectPlace(first)
                             if ((state.place?.size ?: 0) > 1) {
-                                currentPage =  GoogleMapsMenuPages.MULTIPLE_LOCATION_NAMES
+                                currentPage = GoogleMapsMenuPages.MULTIPLE_LOCATION_NAMES
                             } else {
                                 currentPage = GoogleMapsMenuPages.LOCATION_NAME
                                 state.locationName = state.place?.first()?.name
@@ -432,9 +432,10 @@ class EventCommands(
                             onSelect { hook ->
                                 val modal = modalManager.build {
                                     title = "Location Name"
-                                    textInput("location") {
-                                        name = "Location Name"
-                                        placeholder = "Enter the name of the location"
+                                    actionRow {
+                                        text("location", "Location") {
+                                            placeholder("Enter the name of the location")
+                                        }
                                     }
                                 }
 

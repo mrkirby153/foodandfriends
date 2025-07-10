@@ -29,6 +29,7 @@ repositories {
         url = uri("https://repo.mrkirby153.com/public/")
         name = "mrkirby153"
     }
+    maven(url = "https://jitpack.io")
 }
 
 dependencies {
@@ -41,9 +42,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.4")
     implementation("me.mrkirby153:KirbyUtils-Common:7.0-SNAPSHOT")
     implementation("me.mrkirby153:KirbyUtils-Spring:7.0-SNAPSHOT")
-    implementation("com.mrkirby153:bot-core:8.0-SNAPSHOT")
-    implementation("com.mrkirby153:interaction-menus:4.0-SNAPSHOT")
-    implementation("net.dv8tion:JDA:5.3.0")
+    implementation("com.mrkirby153:bot-core:9.0-SNAPSHOT")
+    implementation("com.mrkirby153:interaction-menus:5.0-SNAPSHOT")
+    implementation("io.github.freya022:JDA:c6f764778d")
+//    implementation("net.dv8tion:JDA:5.3.0")
     implementation("io.github.oshai:kotlin-logging-jvm:6.0.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("io.ktor:ktor-client-core:2.3.12")
