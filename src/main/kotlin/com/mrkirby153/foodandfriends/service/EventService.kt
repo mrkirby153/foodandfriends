@@ -1,6 +1,7 @@
 package com.mrkirby153.foodandfriends.service
 
 import com.mrkirby153.botcore.builder.MessageBuilder
+import com.mrkirby153.botcore.builder.componentsv2.container
 import com.mrkirby153.botcore.builder.message
 import com.mrkirby153.botcore.coroutine.await
 import com.mrkirby153.foodandfriends.entity.Event
@@ -183,46 +184,49 @@ class EventManager(
             shardManager.retrieveUserById(person.discordUserId).await()
         }
         return message {
-            text {
+            componentsV2()
+            component(container {
+                accentColor(Color.BLUE)
                 var message = event.schedule!!.message
-                message = message.replace("{time}", "<t:${event.absoluteDate.toInstant().epochSecond}>")
-                appendLine(message)
-                if (event.location != null) {
-                    appendLine()
-                    if (event.location?.isBlank() == false) {
-                        append("Location: ")
-                        if(event.locationName?.isBlank() == false) {
-                            append(event.locationName!!)
-                            append(":")
-                        }
-                        appendLine(" ${event.location}")
-                    }
-                }
-            }
-            if (event.attendees.isNotEmpty())
-                embed {
-                    title = "Attendees"
-                    description = buildString {
-                        rsvps.forEach { (user, rsvps) ->
-                            val rsvpsMatch = rsvps.map { it.type }.toSet().size == 1
-                            append(user.asMention)
-                            append(": ")
-                            if (rsvpsMatch) {
-                                append(getRsvpEmoji(rsvps.first().type))
-                            } else {
-                                append(rsvps.sortedBy { it.rsvpSource }.joinToString(" / ") {
-                                    val emoji = getRsvpEmoji(it.type)
-                                    val abbrev = getProviderAbbreviation(it.rsvpSource)
-                                    "$abbrev $emoji"
-                                })
+                message =
+                    message.replace("{time}", "<t:${event.absoluteDate.toInstant().epochSecond}>")
+                text(message)
+                if (event.location != null && event.location?.isBlank() == false) {
+                    text {
+                        text {
+                            appendLine("**Location:**")
+                            if (event.locationName?.isBlank() == false) {
+                                append(event.locationName)
+                                append(": ")
                             }
-                            appendLine()
+                            appendLine(event.location)
                         }
                     }
-                    color {
-                        color = Color.blue
+                }
+                if (event.attendees.isNotEmpty()) {
+                    separator { }
+                    text {
+                        text {
+                            rsvps.forEach { (user, rsvps) ->
+                                val rsvpsMatch = rsvps.map { it.type }.toSet().size == 1
+                                append(user.asMention)
+                                append(": ")
+                                if (rsvpsMatch) {
+                                    append(getRsvpEmoji(rsvps.first().type))
+                                } else {
+                                    append(rsvps.sortedBy { it.rsvpSource }
+                                        .joinToString(" / ") {
+                                            val emoji = getRsvpEmoji(it.type)
+                                            val abbrev = getProviderAbbreviation(it.rsvpSource)
+                                            "$abbrev $emoji"
+                                        })
+                                }
+                                appendLine()
+                            }
+                        }
                     }
                 }
+            })
         }
     }
 
